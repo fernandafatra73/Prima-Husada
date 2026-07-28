@@ -1,0 +1,21 @@
+---
+description: Auto commit and push after each prompting session turn
+alwaysApply: true
+---
+
+# Git — auto sync (LabPrima)
+
+The user wants **automatic commit and push** while prompting in this repo.
+
+After you finish meaningful work in a turn (files changed):
+
+1. Run `git status` — if nothing to commit, stop.
+2. Stage only safe files — **never** `.env`, credentials, or `node_modules`.
+3. `git commit` with a short, accurate message (what/why, not a dump of filenames).
+4. `git push` to `origin` on the current branch.
+
+If push fails (no network, no upstream), report briefly and continue; do not block the user.
+
+The `stop` hook (`.cursor/hooks/auto-sync.mjs`) also syncs on agent stop; still commit yourself when you have substantive changes so nothing is left unstaged mid-turn.
+
+Do **not** use `--no-verify`, force-push, or amend unless the user explicitly asks.

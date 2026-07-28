@@ -1,0 +1,1279 @@
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { ConfirmModal } from '../components/ui/ConfirmModal.tsx';
+import { Modal } from '../components/ui/Modal.tsx';
+import { ModalFormFooter } from '../components/ui/ModalFormFooter.tsx';
+import { ListPageShell } from '../components/ui/ListPageShell.tsx';
+import { TableRowActions } from '../components/ui/TableRowActions.tsx';
+import { ExpertiseModal } from '../components/ExpertiseModal.tsx';
+import { PemeriksaanPenunjangModal } from '../components/PemeriksaanPenunjangModal.tsx';
+import { parseKlinisData, serializeKlinisData } from '../lib/penunjang.ts';
+import { useListQueryParams, useListSearch } from '../hooks/useListQueryParams.ts';
+import { useListRefresh } from '../context/ListRefreshContext.tsx';
+import { useMutationReload } from '../hooks/useMutationReload.ts';
+import { usePaginatedList } from '../hooks/usePaginatedList.ts';
+import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/api.ts';
+import { birthDateInputMax, birthDateInputMin, isValidBirthDate, normalizeBirthDateOnBlur } from '../lib/birthDate.ts';
+import { clampClinicalInput } from '../lib/clinicalText.ts';
+import {
+  computeAutoSharingAmount,
+  computeUmurYears,
+  formatRupiah,
+  formatUmurTahun,
+} from '../lib/format.ts';
+import { printPasienReport } from '../lib/pasienPrint.ts';
+import type { PaginatedResponse } from '../lib/pagination.ts';
+import '../components/ui/ui.css';
+
+interface Dokter {
+  readonly id: string;
+  readonly nama: string;
+  readonly defaultSharingAmount: string;
+}
+
+interface Radiolog {
+  readonly id: string;
+  readonly nama: string;
+}
+
+interface Jenis {
+  readonly id: string;
+  readonly nama: string;
+  readonly harga: string | null;
+}
+
+interface PendaftaranUmumItem {
+  readonly id: string;
+  readonly noRegistrasi: string;
+  readonly namaPasien: string;
+  readonly umur: string | null;
+  readonly alamat: string | null;
+  readonly telpon: string | null;
+  readonly dokterPengirim: string | null;
+  readonly klinis: string | null;
+  readonly tanggalMasuk: string;
+  readonly admin: string | null;
+}
+
+interface KesanTemplateItem {
+  readonly id: string;
+  readonly judul: string;
+  readonly isi: string;
+}
+
+interface Staff {
+  readonly id: string;
+  readonly nama: string;
+}
+
+const DEFAULT_KESAN_TEMPLATES: readonly KesanTemplateItem[] = [
+  {
+    id: 'default-thorax',
+    judul: 'Thorax',
+    isi: 'Tb paru aktif kanan dan kiri\nTidak tampak cardiomegali',
+  },
+  {
+    id: 'default-normal',
+    judul: 'Thorax Normal',
+    isi: 'Cor dan pulmo dalam batas normal.\nTidak tampak infiltrat.',
+  },
+];
+
+interface PasienRow {
+  readonly id: string;
+  readonly regCode: string;
+  readonly nama: string;
+  readonly umur: number;
+  readonly pengirim: { readonly id: string; readonly nama: string };
+  readonly pemeriksaan: readonly { readonly nama: string }[];
+  readonly totalHarga: string;
+  readonly totalSharing: string;
+  readonly hasilStatus: 'MENUNGGU_HASIL' | 'SELESAI';
+  readonly paymentStatus: 'BELUM_LUNAS' | 'LUNAS';
+  readonly klinis?: string | null;
+}
+
+interface PemeriksaanItem {
+  readonly id: string;
+  readonly jenisPemeriksaanId: string;
+  readonly nama: string;
+  readonly harga: string;
+}
+
+interface PasienDetail extends PasienRow {
+  readonly tanggalLahir: string;
+  readonly noTelepon: string | null;
+  readonly alamat: string | null;
+  readonly klinis: string | null;
+  readonly kesan: string | null;
+  readonly admin: string | null;
+  readonly radiolog: { readonly id: string; readonly nama: string } | null;
+  readonly sharingAmount: string;
+  readonly sharingLocked: boolean;
+  readonly pemeriksaan: readonly PemeriksaanItem[];
+}
+
+interface PasienSummary {
+  readonly totalPasien: number;
+  readonly menungguHasil: number;
+  readonly selesai: number;
+  readonly totalOmzet: string;
+  readonly totalSharing: string;
+}
+
+const HASIL_TABS = [
+  { id: 'all', label: 'Semua data' },
+  { id: 'MENUNGGU_HASIL', label: 'Menunggu hasil' },
+  { id: 'SELESAI', label: 'Selesai' },
+] as const;
+
+export function PasienPage() {
+  const { search, setSearch } = useListSearch();
+  const [hasilTab, setHasilTab] = useState<string>('all');
+  const [paymentFilter, setPaymentFilter] = useState('');
+  const [dokterFilter, setDokterFilter] = useState('');
+  const [timeFilter, setTimeFilter] = useState<'all'|'today'|'week'>('all');
+
+  const dateParams = useMemo(() => {
+    if (timeFilter === 'all') return {};
+    const now = new Date();
+    // Use local time for dates
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    
+    if (timeFilter === 'today') {
+      return { startDate: todayStr, endDate: todayStr };
+    }
+    if (timeFilter === 'week') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 7);
+      const sy = start.getFullYear();
+      const sm = String(start.getMonth() + 1).padStart(2, '0');
+      const sd = String(start.getDate()).padStart(2, '0');
+      return { startDate: `${sy}-${sm}-${sd}`, endDate: todayStr };
+    }
+    return {};
+  }, [timeFilter]);
+
+  const queryParams = useListQueryParams(
+    {
+      ...(hasilTab !== 'all' ? { hasilStatus: hasilTab } : {}),
+      ...(paymentFilter ? { paymentStatus: paymentFilter } : {}),
+      ...(dokterFilter ? { pengirimId: dokterFilter } : {}),
+      ...(dateParams as Record<string, string>),
+    },
+    search,
+  );
+
+  const { version: listRefreshVersion } = useListRefresh();
+  const { items, pagination, setPage, loading, error, reload: reloadList, setError } =
+    usePaginatedList<PasienRow>('/api/pasien', queryParams);
+  const reload = useMutationReload(reloadList);
+  const [dokter, setDokter] = useState<Dokter[]>([]);
+  const [radiologList, setRadiologList] = useState<Radiolog[]>([]);
+  const [jenis, setJenis] = useState<Jenis[]>([]);
+  const [kesanTemplates, setKesanTemplates] = useState<KesanTemplateItem[]>([]);
+  const [pendaftaranList, setPendaftaranList] = useState<PendaftaranUmumItem[]>([]);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [selectedPendaftaranId, setSelectedPendaftaranId] = useState('');
+  const [expertiseModalOpen, setExpertiseModalOpen] = useState(false);
+  const [mastersError, setMastersError] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [printingId, setPrintingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [nama, setNama] = useState('');
+  const [tanggalLahir, setTanggalLahir] = useState('');
+  const [noTelepon, setNoTelepon] = useState('');
+  const [alamat, setAlamat] = useState('');
+  const [pengirimId, setPengirimId] = useState('');
+  const [klinis, setKlinis] = useState('');
+  const [kesan, setKesan] = useState('');
+  const [admin, setAdmin] = useState('');
+  const [radiologId, setRadiologId] = useState('');
+  const [hasilStatus, setHasilStatus] = useState<'MENUNGGU_HASIL' | 'SELESAI'>('MENUNGGU_HASIL');
+  const [paymentStatus, setPaymentStatus] = useState<'BELUM_LUNAS' | 'LUNAS'>('BELUM_LUNAS');
+  const [selectedJenis, setSelectedJenis] = useState<string[]>([]);
+  const [radTambahan, setRadTambahan] = useState<string[]>([]);
+  const [labTambahan, setLabTambahan] = useState<string[]>([]);
+  const [penunjangModalOpen, setPenunjangModalOpen] = useState(false);
+  const [sharingAmount, setSharingAmount] = useState('0');
+  const [sharingMode, setSharingMode] = useState<string>('auto');
+  const [editJenisModalOpen, setEditJenisModalOpen] = useState(false);
+  const [editingJenisItem, setEditingJenisItem] = useState<Jenis | null>(null);
+  const [editingJenisNama, setEditingJenisNama] = useState('');
+  const [editingJenisHarga, setEditingJenisHarga] = useState('');
+  const [savingJenis, setSavingJenis] = useState(false);
+  const [jenisError, setJenisError] = useState<string | null>(null);
+
+  const umurYears = useMemo(() => {
+    if (!isValidBirthDate(tanggalLahir)) return 0;
+    return computeUmurYears(tanggalLahir) ?? 0;
+  }, [tanggalLahir]);
+
+  const autoSharingAmount = useMemo(() => {
+    const dok = dokter.find((d) => d.id === pengirimId);
+    const selectedNames = selectedJenis
+      .map((id) => jenis.find((j) => j.id === id)?.nama || '')
+      .filter(Boolean);
+    return computeAutoSharingAmount(dok?.nama, selectedNames, umurYears, dok?.defaultSharingAmount || '0');
+  }, [dokter, pengirimId, selectedJenis, jenis, umurYears]);
+
+  useEffect(() => {
+    if (sharingMode === 'auto') {
+      setSharingAmount(autoSharingAmount);
+    }
+  }, [sharingMode, autoSharingAmount]);
+
+  const [summary, setSummary] = useState<PasienSummary | null>(null);
+
+  const estimate = useMemo(() => {
+    const totalHarga = selectedJenis.reduce((sum, id) => {
+      const row = jenis.find((j) => j.id === id);
+      return sum + Number(row?.harga ?? 0);
+    }, 0);
+    const amt = Number(sharingAmount);
+    const totalSharing = Number.isFinite(amt) ? amt : 0;
+    return { totalHarga, totalSharing };
+  }, [selectedJenis, jenis, sharingAmount]);
+
+  const loadMasters = useCallback(async () => {
+    setMastersError(null);
+    try {
+      const [dokterRes, jenisRes, radiologRes, kesanRes, pendaftaranRes, staffRes] = await Promise.all([
+        apiGet<PaginatedResponse<Dokter>>('/api/dokter?page=1&limit=200'),
+        apiGet<PaginatedResponse<Jenis>>('/api/jenis-pemeriksaan?page=1&limit=200'),
+        apiGet<PaginatedResponse<Radiolog>>('/api/radiolog?page=1&limit=200'),
+        apiGet<PaginatedResponse<KesanTemplateItem>>('/api/kesan-template?page=1&limit=200').catch(() => ({ items: [] })),
+        apiGet<PaginatedResponse<PendaftaranUmumItem>>('/api/pendaftaran-umum?page=1&limit=300').catch(() => ({ items: [] })),
+        apiGet<PaginatedResponse<Staff>>('/api/staff?page=1&limit=200').catch(() => ({ items: [] })),
+      ]);
+      setDokter(dokterRes.items);
+      setJenis(jenisRes.items.filter((j) => j.harga !== null));
+      setRadiologList(radiologRes.items);
+      setKesanTemplates(kesanRes.items.length > 0 ? kesanRes.items : Array.from(DEFAULT_KESAN_TEMPLATES));
+      setPendaftaranList(pendaftaranRes.items);
+      setStaffList(staffRes.items);
+    } catch (err: unknown) {
+      setMastersError(err instanceof Error ? err.message : 'Gagal memuat master data');
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMasters();
+  }, [loadMasters, listRefreshVersion]);
+
+  const loadSummary = useCallback(async () => {
+    try {
+      const res = await apiGet<PasienSummary>('/api/pasien/summary');
+      setSummary(res);
+    } catch {
+      setSummary(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSummary();
+  }, [loadSummary, items.length]);
+
+  function onPengirimChange(id: string, applyTemplate = true) {
+    setPengirimId(id);
+    if (!applyTemplate) return;
+    const dok = dokter.find((d) => d.id === id);
+    if (dok) {
+      setSharingAmount(dok.defaultSharingAmount);
+      setSharingMode('auto');
+    }
+  }
+
+  function handlePendaftaranSelect(id: string) {
+    setSelectedPendaftaranId(id);
+    const p = pendaftaranList.find(x => x.id === id);
+    if (!p) {
+      setNama('');
+      setAlamat('');
+      setNoTelepon('');
+      setKlinis('');
+      setTanggalLahir('');
+      setPengirimId('');
+      setSharingAmount('0');
+      setSharingMode('auto');
+      setAdmin('');
+      return;
+    }
+    
+    setNama(p.namaPasien);
+    setAlamat(p.alamat || '');
+    setNoTelepon(p.telpon || '');
+    setKlinis(p.klinis || '');
+    setAdmin(p.admin || '');
+    
+    if (p.umur) {
+      const match = p.umur.match(/(\d+)/);
+      if (match) {
+        const years = parseInt(match[1], 10);
+        const y = new Date().getFullYear() - years;
+        setTanggalLahir(`${y}-01-01`);
+      } else {
+        setTanggalLahir('');
+      }
+    } else {
+      setTanggalLahir('');
+    }
+    
+    if (p.dokterPengirim) {
+      const dok = dokter.find(d => d.nama.toLowerCase() === p.dokterPengirim!.toLowerCase());
+      if (dok) {
+        setPengirimId(dok.id);
+        setSharingAmount(dok.defaultSharingAmount);
+      } else {
+        setPengirimId('');
+        setSharingAmount('0');
+      }
+    } else {
+      setPengirimId('');
+      setSharingAmount('0');
+    }
+  }
+
+  function resetForm() {
+    setNama('');
+    setTanggalLahir('');
+    setNoTelepon('');
+    setAlamat('');
+    setPengirimId('');
+    setKlinis('');
+    setKesan('');
+    setAdmin('');
+    setRadiologId('');
+    setHasilStatus('MENUNGGU_HASIL');
+    setPaymentStatus('BELUM_LUNAS');
+    setSelectedJenis([]);
+    setRadTambahan([]);
+    setLabTambahan([]);
+    setPenunjangModalOpen(false);
+    setSharingAmount('0');
+    setSharingMode('auto');
+    setEditingId(null);
+    setSelectedPendaftaranId('');
+  }
+
+  function toggleJenis(id: string) {
+    setSelectedJenis((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  async function openEdit(id: string) {
+    setError(null);
+    try {
+      const res = await apiGet<{ item: PasienDetail }>(`/api/pasien/${id}`);
+      const p = res.item;
+      const parsedKlinis = parseKlinisData(p.klinis);
+      setEditingId(p.id);
+      setNama(p.nama);
+      setTanggalLahir(p.tanggalLahir);
+      setNoTelepon(p.noTelepon ?? '');
+      setAlamat(p.alamat ?? '');
+      setPengirimId(p.pengirim.id);
+      setKlinis(parsedKlinis.text);
+      setRadTambahan(parsedKlinis.radTambahan);
+      setLabTambahan(parsedKlinis.labTambahan);
+      setKesan(p.kesan ?? '');
+      setAdmin(p.admin ?? '');
+      setRadiologId(p.radiolog?.id ?? '');
+      setHasilStatus(p.hasilStatus);
+      setPaymentStatus(p.paymentStatus);
+      const currentSharing = p.sharingAmount;
+      setSharingAmount(currentSharing);
+      const dok = dokter.find((d) => d.id === p.pengirim.id);
+      const selNames = p.pemeriksaan
+        .map((x) => jenis.find((j) => j.id === x.jenisPemeriksaanId)?.nama || '')
+        .filter(Boolean);
+      const computedAuto = computeAutoSharingAmount(
+        dok?.nama,
+        selNames,
+        computeUmurYears(p.tanggalLahir) ?? 0,
+        dok?.defaultSharingAmount || '0'
+      );
+      if (currentSharing === computedAuto) {
+        setSharingMode('auto');
+      } else if (['18000', '20000', '33000', '35000', '58000', '88000', '50000', '0'].includes(currentSharing)) {
+        setSharingMode(currentSharing);
+      } else {
+        setSharingMode('custom');
+      }
+      setSelectedJenis(p.pemeriksaan.map((x) => x.jenisPemeriksaanId));
+      setEditOpen(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal memuat detail pasien');
+    }
+  }
+
+  async function handlePrint(id: string) {
+    setPrintingId(id);
+    setError(null);
+    try {
+      await printPasienReport(id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal membuat PDF');
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
+  async function onSubmitAdd(e: FormEvent) {
+    e.preventDefault();
+    if (!isValidBirthDate(tanggalLahir)) {
+      setError('Tanggal lahir tidak valid');
+      return;
+    }
+    if (selectedJenis.length === 0) {
+      setError('Pilih minimal satu jenis pemeriksaan');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await apiPost('/api/pasien', {
+        nama,
+        tanggalLahir,
+        noTelepon,
+        alamat,
+        pengirimId,
+        klinis: serializeKlinisData(klinis, radTambahan, labTambahan),
+        jenisPemeriksaanIds: selectedJenis,
+        sharingAmount: Number(sharingAmount),
+        radiologId: radiologId || undefined,
+        admin: admin || undefined,
+      });
+      setAddOpen(false);
+      resetForm();
+      await reload({ resetPage: true });
+      await loadSummary();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onSubmitEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    if (!isValidBirthDate(tanggalLahir)) {
+      setError('Tanggal lahir tidak valid');
+      return;
+    }
+    if (selectedJenis.length === 0) {
+      setError('Pilih minimal satu jenis pemeriksaan');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await apiPatch(`/api/pasien/${editingId}`, {
+        nama,
+        tanggalLahir,
+        noTelepon,
+        alamat,
+        pengirimId,
+        klinis: serializeKlinisData(klinis, radTambahan, labTambahan),
+        hasilStatus,
+        paymentStatus,
+        sharingAmount: Number(sharingAmount),
+        jenisPemeriksaanIds: selectedJenis,
+        kesan,
+        admin: admin || undefined,
+        radiologId: radiologId || null,
+      });
+      setEditOpen(false);
+      resetForm();
+      await reload();
+      await loadSummary();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan perubahan');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setError(null);
+    try {
+      await apiDelete(`/api/pasien/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      await reload();
+      await loadSummary();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal menghapus');
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
+  function openEditJenisModal(j: Jenis) {
+    setEditingJenisItem(j);
+    setEditingJenisNama(j.nama);
+    setEditingJenisHarga(j.harga ?? '');
+    setJenisError(null);
+    setEditJenisModalOpen(true);
+  }
+
+  async function onSubmitEditJenis(e: FormEvent) {
+    e.preventDefault();
+    if (!editingJenisItem) return;
+    if (!editingJenisNama.trim()) {
+      setJenisError('Nama jenis pemeriksaan wajib diisi');
+      return;
+    }
+    if (!editingJenisHarga.trim() || isNaN(Number(editingJenisHarga))) {
+      setJenisError('Harga layanan wajib diisi dengan angka valid');
+      return;
+    }
+    setSavingJenis(true);
+    setJenisError(null);
+    try {
+      await apiPatch(`/api/jenis-pemeriksaan/${editingJenisItem.id}`, {
+        nama: editingJenisNama.trim(),
+        harga: Number(editingJenisHarga),
+      });
+      setEditJenisModalOpen(false);
+      await loadMasters();
+    } catch (err: unknown) {
+      setJenisError(err instanceof Error ? err.message : 'Gagal menyimpan jenis pemeriksaan');
+    } finally {
+      setSavingJenis(false);
+    }
+  }
+
+  const statusFields = (
+    <>
+      <div className="form-field">
+        <label htmlFor="hasil">Status hasil</label>
+        <select
+          id="hasil"
+          value={hasilStatus}
+          onChange={(e) => setHasilStatus(e.target.value as 'MENUNGGU_HASIL' | 'SELESAI')}
+        >
+          <option value="MENUNGGU_HASIL">Menunggu hasil</option>
+          <option value="SELESAI">Selesai</option>
+        </select>
+      </div>
+      <div className="form-field">
+        <label htmlFor="bayar">Status pembayaran</label>
+        <select
+          id="bayar"
+          value={paymentStatus}
+          onChange={(e) => setPaymentStatus(e.target.value as 'BELUM_LUNAS' | 'LUNAS')}
+        >
+          <option value="BELUM_LUNAS">Belum lunas</option>
+          <option value="LUNAS">Lunas</option>
+        </select>
+      </div>
+    </>
+  );
+
+  const penunjangField = (
+    <div className="form-field form-grid--span-3">
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+          background: 'var(--color-bg-subtle, #f8fafc)',
+          padding: '0.85rem 1rem',
+          borderRadius: '8px',
+          border: '1px solid var(--color-border)',
+        }}
+      >
+        <div>
+          <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--color-text)' }}>
+            Pemeriksaan Tambahan Radiologi
+          </div>
+          <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+            {radTambahan.length === 0
+              ? 'Belum ada pemeriksaan radiologi tambahan yang dipilih.'
+              : `Terpilih ${radTambahan.length} pemeriksaan radiologi tambahan.`}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn--secondary btn--sm"
+          onClick={() => setPenunjangModalOpen(true)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}
+        >
+          <span>⚡</span> Pemeriksaan Tambahan Radiologi
+        </button>
+      </div>
+
+      {radTambahan.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.65rem' }}>
+          {radTambahan.map((r) => (
+            <span
+              key={`rad-${r}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                padding: '0.2rem 0.55rem',
+                backgroundColor: '#e0e7ff',
+                color: '#3730a3',
+                borderRadius: '4px',
+                fontSize: '0.78rem',
+                fontWeight: 500,
+              }}
+            >
+              {r}
+              <button
+                type="button"
+                onClick={() => setRadTambahan((prev) => prev.filter((item) => item !== r))}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#3730a3', fontWeight: 'bold', padding: 0 }}
+                title="Hapus"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const jenisPemeriksaanField = (
+    <div className="form-field form-grid--span-3" style={{ marginTop: '0.5rem' }}>
+      <label style={{ fontWeight: 600, color: '#0369a1', marginBottom: '0.5rem', display: 'block' }}>
+        Tabel Jenis Pemeriksaan, Harga & Sharing
+      </label>
+      <div
+        style={{
+          border: '1px solid #e0e7ff',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          background: '#ffffff',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+        }}
+      >
+        <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 0 }}>
+          <thead style={{ background: '#f0f9ff', color: '#0369a1', borderBottom: '2px solid #bae6fd' }}>
+            <tr>
+              <th style={{ width: '70px', textAlign: 'center', padding: '10px' }}>Pilih</th>
+              <th style={{ textAlign: 'left', padding: '10px' }}>Jenis Pemeriksaan</th>
+              <th style={{ width: '150px', textAlign: 'right', padding: '10px' }}>Harga</th>
+              <th style={{ width: '150px', textAlign: 'right', padding: '10px' }}>Sharing</th>
+              <th style={{ width: '90px', textAlign: 'center', padding: '10px' }}>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {jenis.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ textAlign: 'center', padding: '1.5rem', color: '#64748b' }}>
+                  Belum ada data jenis pemeriksaan.
+                </td>
+              </tr>
+            ) : (
+              jenis.map((j) => {
+                const isChecked = selectedJenis.includes(j.id);
+                const itemHarga = Number(j.harga ?? 0);
+                const itemSharing = isChecked ? Number(sharingAmount) || 0 : 0;
+                return (
+                  <tr
+                    key={j.id}
+                    onClick={() => toggleJenis(j.id)}
+                    style={{
+                      cursor: 'pointer',
+                      backgroundColor: isChecked ? '#eff6ff' : 'transparent',
+                      transition: 'background-color 0.15s ease',
+                      borderBottom: '1px solid #f1f5f9',
+                    }}
+                  >
+                    <td style={{ textAlign: 'center', padding: '10px' }}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleJenis(j.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                      />
+                    </td>
+                    <td style={{ padding: '10px', fontWeight: isChecked ? 600 : 400, color: '#1e293b' }}>
+                      {j.nama}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '10px', fontWeight: isChecked ? 600 : 400, color: '#0f172a' }}>
+                      {formatRupiah(itemHarga)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '10px', fontWeight: isChecked ? 600 : 400, color: isChecked ? '#0284c7' : '#94a3b8' }}>
+                      {isChecked ? formatRupiah(itemSharing) : '-'}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '10px' }}>
+                      <button
+                        type="button"
+                        className="btn btn--xs btn--secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditJenisModal(j);
+                        }}
+                        style={{
+                          padding: '0.25rem 0.55rem',
+                          fontSize: '0.78rem',
+                          borderRadius: '6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          border: '1px solid var(--color-border)',
+                          background: '#ffffff',
+                          color: '#0f172a',
+                          fontWeight: 500,
+                        }}
+                        title="Edit jenis pemeriksaan & harga"
+                      >
+                        ✎ Edit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+          {selectedJenis.length > 0 ? (
+            <tfoot style={{ background: '#f8fafc', fontWeight: 600, borderTop: '2px solid #cbd5e1' }}>
+              <tr>
+                <td colSpan={2} style={{ padding: '10px', textAlign: 'right', color: '#334155' }}>
+                  Total Terpilih ({selectedJenis.length} pemeriksaan):
+                </td>
+                <td style={{ padding: '10px', textAlign: 'right', color: '#0f172a' }}>
+                  {formatRupiah(estimate.totalHarga)}
+                </td>
+                <td style={{ padding: '10px', textAlign: 'right', color: '#0284c7' }}>
+                  {formatRupiah(estimate.totalSharing)}
+                </td>
+                <td style={{ padding: '10px' }}></td>
+              </tr>
+            </tfoot>
+          ) : null}
+        </table>
+      </div>
+    </div>
+  );
+
+  const financePreview =
+    selectedJenis.length > 0 ? (
+      <div className="form-field finance-preview">
+        <span className="finance-preview__label">Perkiraan tagihan</span>
+        <div className="finance-preview__row">
+          <span>Total layanan</span>
+          <strong>{formatRupiah(estimate.totalHarga)}</strong>
+        </div>
+        <div className="finance-preview__row">
+          <span>Sharing</span>
+          <strong>{formatRupiah(estimate.totalSharing)}</strong>
+        </div>
+      </div>
+    ) : null;
+
+  const umurPreview = useMemo(() => {
+    if (!isValidBirthDate(tanggalLahir)) {
+      return null;
+    }
+    return umurYears;
+  }, [tanggalLahir, umurYears]);
+
+  const patientFields = (
+    <>
+      <div className="form-field">
+        <label htmlFor="nama">Nama</label>
+        <input id="nama" required value={nama} onChange={(e) => setNama(e.target.value)} />
+      </div>
+      <div className="form-field">
+        <label htmlFor="tgl">Tanggal lahir</label>
+        <input
+          id="tgl"
+          type="date"
+          required
+          min={birthDateInputMin()}
+          max={birthDateInputMax()}
+          value={tanggalLahir}
+          onChange={(e) => setTanggalLahir(e.target.value)}
+          onBlur={(e) => setTanggalLahir(normalizeBirthDateOnBlur(e.target.value))}
+        />
+      </div>
+      <div className="form-field">
+        <span className="form-field__static-label">Umur</span>
+        <p className="form-field__static-value">
+          {umurPreview === null ? '—' : formatUmurTahun(umurPreview)}
+        </p>
+      </div>
+      <div className="form-field">
+        <label htmlFor="telp">No telepon</label>
+        <input id="telp" value={noTelepon} onChange={(e) => setNoTelepon(e.target.value)} />
+      </div>
+      <div className="form-field">
+        <label htmlFor="pengirim">Dokter pengirim</label>
+        <select
+          id="pengirim"
+          required
+          value={pengirimId}
+          onChange={(e) => onPengirimChange(e.target.value, true)}
+        >
+          <option value="">Pilih dokter</option>
+          {dokter.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.nama}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="form-field">
+        <label htmlFor="sharing-select" style={{ fontWeight: 600, color: '#0369a1' }}>
+          Pilihan Nominal Sharing
+        </label>
+        <select
+          id="sharing-select"
+          value={sharingMode}
+          onChange={(e) => {
+            const val = e.target.value;
+            setSharingMode(val);
+            if (val === 'auto') {
+              setSharingAmount(autoSharingAmount);
+            } else if (val !== 'custom') {
+              setSharingAmount(val);
+            }
+          }}
+          style={{
+            fontWeight: 600,
+            color: '#0284c7',
+            backgroundColor: '#f0f9ff',
+            border: '1px solid #7dd3fc',
+            padding: '0.45rem',
+            borderRadius: '6px',
+          }}
+        >
+          <option value="auto">
+            ⚡ Otomatis ({formatRupiah(Number(autoSharingAmount) || 0)} — Sesuai Rumus Dokter, Umur &amp; Pemeriksaan)
+          </option>
+          <option value="18000">Rp 18.000 — Thorax Anak (&lt; 10 th) — dr. Anna Diah</option>
+          <option value="20000">Rp 20.000 — Thorax Dewasa (≥ 10 th) — dr. Anna Diah</option>
+          <option value="33000">Rp 33.000 — Thorax Anak (&lt; 10 th) — dr. Eva / dr. Iman</option>
+          <option value="35000">Rp 35.000 — Thorax Dewasa (≥ 10 th) — dr. Eva / dr. Iman</option>
+          <option value="58000">Rp 58.000 — Shoulder Joint</option>
+          <option value="88000">Rp 88.000 — Lumbosacral</option>
+          <option value="50000">Rp 50.000 — Standar Dokter</option>
+          <option value="0">Rp 0 — Tanpa Sharing</option>
+          <option value="custom">✎ Input Manual / Lainnya...</option>
+        </select>
+      </div>
+      <div className="form-field">
+        <label htmlFor="sharing">Nominal Sharing (Rp)</label>
+        <input
+          id="sharing"
+          type="number"
+          min="0"
+          step="1"
+          value={sharingAmount}
+          onChange={(e) => {
+            setSharingAmount(e.target.value);
+            setSharingMode('custom');
+          }}
+        />
+      </div>
+    </>
+  );
+
+  const alamatRadiologFields = (
+    <>
+      <div className="form-field">
+        <label htmlFor="alamat">Alamat</label>
+        <input id="alamat" value={alamat} onChange={(e) => setAlamat(e.target.value)} />
+      </div>
+      <div className="form-field">
+        <label htmlFor="radiolog">Radiolog</label>
+        <select
+          id="radiolog"
+          value={radiologId}
+          onChange={(e) => setRadiologId(e.target.value)}
+        >
+          <option value="">Pilih radiolog</option>
+          {radiologList.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.nama}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="form-field">
+        <label htmlFor="admin">Admin</label>
+        <select
+          id="admin"
+          value={admin}
+          onChange={(e) => setAdmin(e.target.value)}
+        >
+          <option value="">Pilih admin</option>
+          {staffList.map((s) => (
+            <option key={s.id} value={s.nama}>
+              {s.nama}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+
+  const klinisField = (
+    <div className="form-field form-grid--span-3">
+      <label htmlFor="klinis">Klinis</label>
+      <textarea
+        id="klinis"
+        rows={2}
+        value={klinis}
+        onChange={(e) => setKlinis(clampClinicalInput(e.target.value))}
+      />
+    </div>
+  );
+
+  const kesanField = (
+    <div className="form-field form-grid--span-2">
+      <div className="form-field__header">
+        <label htmlFor="kesan" style={{ margin: 0 }}>Kesan</label>
+        <button
+          type="button"
+          className="btn btn--xs btn--primary"
+          onClick={() => setExpertiseModalOpen(true)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+        >
+          <span>⚡</span> Expertise
+        </button>
+      </div>
+      <textarea
+        id="kesan"
+        rows={3}
+        value={kesan}
+        onChange={(e) => setKesan(clampClinicalInput(e.target.value))}
+        placeholder="Isi kesan radiologi..."
+      />
+    </div>
+  );
+
+  const displayError = error ?? mastersError;
+
+  const metrics = summary
+    ? [
+        {
+          label: 'Total pasien',
+          value: String(summary.totalPasien),
+          tone: 'blue' as const,
+          iconKind: 'users' as const,
+        },
+        {
+          label: 'Menunggu hasil',
+          value: String(summary.menungguHasil),
+          tone: 'amber' as const,
+          iconKind: 'clock' as const,
+        },
+        {
+          label: 'Selesai',
+          value: String(summary.selesai),
+          tone: 'green' as const,
+          iconKind: 'check' as const,
+        },
+        {
+          label: 'Omzet',
+          value: formatRupiah(summary.totalOmzet),
+          tone: 'slate' as const,
+          iconKind: 'currency' as const,
+        },
+        {
+          label: 'Komisi',
+          value: formatRupiah(summary.totalSharing),
+          tone: 'violet' as const,
+          iconKind: 'percent' as const,
+        },
+      ]
+    : undefined;
+
+  return (
+    <>
+      <ListPageShell
+        title="Manajemen Pasien"
+        subtitle="Registrasi, status hasil, dan pembayaran pasien radiologi"
+        action={
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button
+              type="button"
+              className={`btn btn--sm ${timeFilter === 'today' ? 'btn--primary' : 'btn--ghost'}`}
+              onClick={() => {
+                setTimeFilter(timeFilter === 'today' ? 'all' : 'today');
+                setPage(1);
+              }}
+              style={timeFilter !== 'today' ? { border: '1px solid var(--color-border)' } : {}}
+            >
+              📅 Hari Ini
+            </button>
+            <button
+              type="button"
+              className={`btn btn--sm ${timeFilter === 'week' ? 'btn--primary' : 'btn--ghost'}`}
+              onClick={() => {
+                setTimeFilter(timeFilter === 'week' ? 'all' : 'week');
+                setPage(1);
+              }}
+              style={timeFilter !== 'week' ? { border: '1px solid var(--color-border)' } : {}}
+            >
+              📅 7 Hari Terakhir
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => {
+                resetForm();
+                setAddOpen(true);
+              }}
+            >
+              + Registrasi Pasien
+            </button>
+          </div>
+        }
+        metrics={metrics}
+        tabs={HASIL_TABS.map((t) => ({ id: t.id, label: t.label }))}
+        activeTab={hasilTab}
+        onTabChange={setHasilTab}
+        selects={[
+          {
+            id: 'filter-bayar',
+            label: 'Pembayaran',
+            value: paymentFilter,
+            placeholder: 'Semua',
+            options: [
+              { value: 'BELUM_LUNAS', label: 'Belum lunas' },
+              { value: 'LUNAS', label: 'Lunas' },
+            ],
+            onChange: setPaymentFilter,
+          },
+          {
+            id: 'filter-dokter',
+            label: 'Dokter pengirim',
+            value: dokterFilter,
+            placeholder: 'Semua dokter',
+            options: dokter.map((d) => ({ value: d.id, label: d.nama })),
+            onChange: setDokterFilter,
+          },
+        ]}
+        searchPlaceholder="Cari nama, no. reg, telepon…"
+        searchValue={search}
+        onSearchChange={setSearch}
+        onRefresh={() => void reload()}
+        error={displayError}
+        loading={loading}
+        pagination={pagination}
+        onPageChange={setPage}
+      >
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>No. Reg</th>
+              <th>Nama</th>
+              <th>Umur</th>
+              <th>Pengirim</th>
+              <th>Pemeriksaan</th>
+              <th>Total</th>
+              <th>Sharing</th>
+              <th>Hasil</th>
+              <th>Bayar</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={10}>Belum ada pasien.</td>
+              </tr>
+            ) : (
+              items.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.regCode}</td>
+                  <td>{p.nama}</td>
+                  <td>{formatUmurTahun(p.umur)}</td>
+                  <td>{p.pengirim.nama}</td>
+                  <td>
+                    <div>{p.pemeriksaan.map((x) => x.nama).join(', ')}</div>
+                    {(() => {
+                      const parsed = parseKlinisData(p.klinis);
+                      const parts: string[] = [];
+                      if (parsed.radTambahan.length > 0)
+                        parts.push(`+ Rad: ${parsed.radTambahan.join(', ')}`);
+                      if (parsed.labTambahan.length > 0)
+                        parts.push(`+ Lab: ${parsed.labTambahan.join(', ')}`);
+                      return parts.length > 0 ? (
+                        <div
+                          style={{
+                            fontSize: '0.78rem',
+                            color: 'var(--color-primary)',
+                            marginTop: '0.15rem',
+                          }}
+                        >
+                          {parts.join(' | ')}
+                        </div>
+                      ) : null;
+                    })()}
+                  </td>
+                  <td>{formatRupiah(p.totalHarga)}</td>
+                  <td>{formatRupiah(p.totalSharing)}</td>
+                  <td>
+                    <span
+                      className={`badge ${p.hasilStatus === 'SELESAI' ? 'badge--ok' : 'badge--warn'}`}
+                    >
+                      {p.hasilStatus === 'SELESAI' ? 'Selesai' : 'Menunggu'}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className={`badge ${p.paymentStatus === 'LUNAS' ? 'badge--ok' : 'badge--muted'}`}
+                    >
+                      {p.paymentStatus === 'LUNAS' ? 'Lunas' : 'Belum'}
+                    </span>
+                  </td>
+                  <td>
+                    <TableRowActions
+                      onPrint={() => void handlePrint(p.id)}
+                      onEdit={() => void openEdit(p.id)}
+                      onDelete={() => setDeleteTarget({ id: p.id, label: p.nama })}
+                      printLabel={
+                        printingId === p.id ? 'Membuat PDF…' : 'Cetak hasil radiologi'
+                      }
+                    />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </ListPageShell>
+
+      <Modal open={addOpen} title="Registrasi Pasien Baru" onClose={() => setAddOpen(false)} size="xl">
+        <form onSubmit={(e) => void onSubmitAdd(e)} className="form-grid form-grid--wide">
+          <div className="form-field form-grid--span-3" style={{ background: '#f0f9ff', padding: '1rem', borderRadius: '8px', border: '1px solid #bae6fd', marginBottom: '0.5rem' }}>
+            <label htmlFor="ambil-reg" style={{ color: '#0369a1', fontWeight: 600 }}>Ambil Data dari Pendaftaran Umum (Opsional)</label>
+            <select
+              id="ambil-reg"
+              value={selectedPendaftaranId}
+              onChange={(e) => handlePendaftaranSelect(e.target.value)}
+              style={{ borderColor: '#7dd3fc', backgroundColor: 'white' }}
+            >
+              <option value="">-- Pilih Data Pasien --</option>
+              {pendaftaranList.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.noRegistrasi} - {p.namaPasien} ({p.umur || '-'})
+                </option>
+              ))}
+            </select>
+          </div>
+          {patientFields}
+          {alamatRadiologFields}
+          {klinisField}
+          {penunjangField}
+          {jenisPemeriksaanField}
+          {financePreview}
+          <div className="form-grid--span-3">
+            <ModalFormFooter
+              onCancel={() => setAddOpen(false)}
+              submitLabel="Simpan"
+              loading={saving}
+            />
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={editOpen} title="Ubah Data Pasien" onClose={() => setEditOpen(false)} size="xl">
+        <form onSubmit={(e) => void onSubmitEdit(e)} className="form-grid form-grid--wide">
+          {patientFields}
+          {alamatRadiologFields}
+          {statusFields}
+          {klinisField}
+          {kesanField}
+          {financePreview}
+          {penunjangField}
+          {jenisPemeriksaanField}
+          <div className="form-grid--span-3">
+            <ModalFormFooter
+              onCancel={() => setEditOpen(false)}
+              submitLabel="Simpan perubahan"
+              loading={saving}
+            />
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title="Hapus pasien"
+        message={`Yakin hapus "${deleteTarget?.label ?? ''}"? Tindakan ini tidak bisa dibatalkan.`}
+        loading={deleteLoading}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void confirmDelete()}
+      />
+
+      <ExpertiseModal
+        open={expertiseModalOpen}
+        onClose={() => setExpertiseModalOpen(false)}
+        onSelectTemplate={(isiText) => setKesan((prev) => clampClinicalInput(prev ? prev + '\n\n' + isiText : isiText))}
+        templates={kesanTemplates}
+        onTemplatesChanged={loadMasters}
+      />
+
+      <PemeriksaanPenunjangModal
+        open={penunjangModalOpen}
+        onClose={() => setPenunjangModalOpen(false)}
+        radTambahan={radTambahan}
+        labTambahan={labTambahan}
+        onChange={(newRad, newLab) => {
+          setRadTambahan(newRad);
+          setLabTambahan(newLab);
+        }}
+      />
+
+      <Modal
+        open={editJenisModalOpen}
+        title="Ubah Jenis Pemeriksaan & Harga"
+        onClose={() => setEditJenisModalOpen(false)}
+        size="sm"
+      >
+        <form onSubmit={(e) => void onSubmitEditJenis(e)} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.25rem 0' }}>
+          {jenisError ? <div className="alert alert--error">{jenisError}</div> : null}
+          <div className="form-field">
+            <label htmlFor="edit-jenis-nama">Nama Jenis Pemeriksaan</label>
+            <input
+              id="edit-jenis-nama"
+              type="text"
+              value={editingJenisNama}
+              onChange={(e) => setEditingJenisNama(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="edit-jenis-harga">Harga Layanan (Rp)</label>
+            <input
+              id="edit-jenis-harga"
+              type="number"
+              min="0"
+              step="1"
+              value={editingJenisHarga}
+              onChange={(e) => setEditingJenisHarga(e.target.value)}
+              required
+            />
+          </div>
+          <ModalFormFooter
+            onCancel={() => setEditJenisModalOpen(false)}
+            submitLabel="Simpan perubahan"
+            loading={savingJenis}
+          />
+        </form>
+      </Modal>
+    </>
+  );
+}

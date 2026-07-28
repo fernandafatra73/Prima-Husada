@@ -1,0 +1,43 @@
+{
+  "name": "labprima",
+  "version": "0.0.0",
+  "private": true,
+  "description": "LabPrima — React (Vite) frontend and Node API with Prisma and PostgreSQL.",
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @labprima/api\" \"npm run dev -w @labprima/web\"",
+    "dev:api": "npm run dev -w @labprima/api",
+    "dev:web": "npm run dev -w @labprima/web",
+    "build": "npm run build -w @labprima/api && npm run build -w @labprima/web",
+    "start": "npm run start -w @labprima/api",
+    "prisma:generate": "npm run prisma:generate -w @labprima/api",
+    "prisma:migrate": "npm run prisma:migrate -w @labprima/api",
+    "prisma:seed": "npm run prisma:seed -w @labprima/api",
+    "lint": "eslint .",
+    "test": "vitest run unit --config __tests__/vitest.config.ts",
+    "clean": "rimraf coverage build apps/api/build apps/web/dist"
+  },
+  "devDependencies": {
+    "@eslint/js": "~10.0.1",
+    "@types/node": "~24",
+    "@typescript-eslint/parser": "~8.59.0",
+    "@vitest/coverage-v8": "~4.1.4",
+    "@vitest/eslint-plugin": "~1.6.15",
+    "concurrently": "^9.2.1",
+    "eslint": "~10.2",
+    "eslint-config-prettier": "~10.1",
+    "globals": "~17.5.0",
+    "prettier": "~3.8",
+    "rimraf": "~6.1.3",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "~8.59.0",
+    "vitest": "~4.1.4"
+  },
+  "license": "Apache-2.0"
+}

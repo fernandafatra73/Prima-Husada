@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "types": ["vitest/globals", "node"],
+    "lib": ["ES2024"]
+  },
+  "include": ["__tests__"]
+}

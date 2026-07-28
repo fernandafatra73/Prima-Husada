@@ -1,0 +1,51 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+
+# Coverage
+coverage
+
+# Transpiled files
+build/
+
+# VS Code
+.vscode
+!.vscode/tasks.js
+
+# JetBrains IDEs
+.idea/
+
+# Optional npm cache directory
+.npm
+
+# Mise local override
+mise.local.toml
+
+# Optional eslint cache
+.eslintcache
+
+# Env
+.env
+.env.local
+
+# Prisma generated client
+apps/api/src/generated/
+
+# Vite
+apps/web/dist/
+*.tsbuildinfo
+apps/api/generated/
+
+# Misc
+.DS_Store
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+

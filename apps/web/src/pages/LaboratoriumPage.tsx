@@ -1,0 +1,1276 @@
+import { useCallback, useEffect, useState } from 'react';
+import { PDFViewer } from '@react-pdf/renderer';
+import { ListPageShell } from '../components/ui/ListPageShell.tsx';
+import { Modal } from '../components/ui/Modal.tsx';
+import { ConfirmModal } from '../components/ui/ConfirmModal.tsx';
+import { useListQueryParams, useListSearch } from '../hooks/useListQueryParams.ts';
+import { useMutationReload } from '../hooks/useMutationReload.ts';
+import { usePaginatedList } from '../hooks/usePaginatedList.ts';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../lib/api.ts';
+import { formatUmurTahun } from '../lib/format.ts';
+import type { PaginatedResponse } from '../lib/pagination.ts';
+import { LabReportDocument, type LabReportData } from '../pdf/LabReportDocument.tsx';
+import { loadLogoDataUrl } from '../pdf/loadLogoDataUrl.ts';
+import { printLabReport } from '../pdf/printLabReport.tsx';
+import {
+  DEFAULT_LAB_TABLE_ROWS,
+  PAKET_PEMERIKSAAN_LAB,
+  applyLabPackage,
+  lookupLabReference,
+  groupLabRowsForPdf,
+  parseLabKesan,
+  serializeLabKesan,
+  isLabResultAbnormal,
+  formatAbnormalResult,
+  type LabTableRow,
+  type ParsedLabData,
+} from '../lib/labKesan.ts';
+import { formatKlinisDisplay, serializeKlinisData } from '../lib/penunjang.ts';
+import '../components/ui/ui.css';
+
+export {
+  DEFAULT_LAB_TABLE_ROWS,
+  PAKET_PEMERIKSAAN_LAB,
+  applyLabPackage,
+  lookupLabReference,
+  groupLabRowsForPdf,
+  parseLabKesan,
+  serializeLabKesan,
+  isLabResultAbnormal,
+  formatAbnormalResult,
+  type LabTableRow,
+  type ParsedLabData,
+};
+
+interface LabPasienItem {
+  readonly id: string;
+  readonly regCode: string;
+  readonly nama: string;
+  readonly umur: number;
+  readonly jenisKelamin: 'L' | 'P';
+  readonly tanggalLahir: string;
+  readonly alamat: string | null;
+  readonly noTelepon: string | null;
+  readonly createdAt: string;
+  readonly klinis: string | null;
+  readonly kesan: string | null;
+  readonly hasilStatus: 'MENUNGGU_HASIL' | 'SELESAI';
+  readonly paymentStatus: 'BELUM_LUNAS' | 'LUNAS';
+  readonly pengirim: { readonly id: string; readonly nama: string };
+  readonly radiolog: { readonly id: string; readonly nama: string } | null;
+  readonly pemeriksaan: readonly { readonly id: string; readonly jenisPemeriksaanId: string; readonly nama: string }[];
+}
+
+interface PetugasLabItem {
+  readonly id: string;
+  readonly nama: string;
+  readonly nip: string | null;
+  readonly noTelepon: string | null;
+}
+
+interface Dokter {
+  readonly id: string;
+  readonly nama: string;
+  readonly defaultSharingAmount: string;
+}
+
+interface Staff { readonly id: string; readonly nama: string; readonly role: string; }
+
+interface PendaftaranUmumItem {
+  readonly id: string;
+  readonly noRegistrasi: string;
+  readonly namaPasien: string;
+  readonly umur: string | null;
+  readonly alamat: string | null;
+  readonly telpon: string | null;
+  readonly dokterPengirim: string | null;
+  readonly klinis: string | null;
+  readonly tanggalMasuk: string;
+  readonly admin: string | null;
+}
+
+interface PaketLabItemData {
+  readonly id: string;
+  readonly grup: string | null;
+  readonly pemeriksaan: string;
+  readonly nilaiRujukan: string;
+  readonly urutan: number;
+}
+
+interface PaketLabData {
+  readonly id: string;
+  readonly nama: string;
+  readonly urutan: number;
+  readonly items: readonly PaketLabItemData[];
+}
+
+function formatDateDisplay(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+export function LaboratoriumPage() {
+  const { search, setSearch } = useListSearch();
+  const queryParams = useListQueryParams({}, search);
+  const { items, pagination, setPage, loading, error, setError, reload: reloadList } =
+    usePaginatedList<LabPasienItem>('/api/pasien', queryParams);
+  const reload = useMutationReload(reloadList);
+
+  const [selected, setSelected] = useState<LabPasienItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<LabPasienItem | null>(null);
+  const [labRows, setLabRows] = useState<LabTableRow[]>([]);
+  const [analisList, setAnalisList] = useState<PetugasLabItem[]>([]);
+  const [analisId, setAnalisId] = useState('');
+  const [analisNama, setAnalisNama] = useState('');
+  const [hasilStatus, setHasilStatus] = useState<'MENUNGGU_HASIL' | 'SELESAI'>('MENUNGGU_HASIL');
+  const [paymentStatus, setPaymentStatus] = useState<'BELUM_LUNAS' | 'LUNAS'>('BELUM_LUNAS');
+  const [saving, setSaving] = useState(false);
+  const [printingId, setPrintingId] = useState<string | null>(null);
+  const [logoSrc, setLogoSrc] = useState('');
+  const [duplikatTarget, setDuplikatTarget] = useState<LabPasienItem | null>(null);
+  const [duplikatLoading, setDuplikatLoading] = useState(false);
+
+  // Registrasi Lab state
+  const [regModalOpen, setRegModalOpen] = useState(false);
+  const [dokterList, setDokterList] = useState<Dokter[]>([]);
+    const [pendaftaranList, setPendaftaranList] = useState<PendaftaranUmumItem[]>([]);
+  const [regSaving, setRegSaving] = useState(false);
+  
+    const [regNama, setRegNama] = useState('');
+  const [regTanggalLahir, setRegTanggalLahir] = useState('');
+  const [regNoTelepon, setRegNoTelepon] = useState('');
+  const [regAlamat, setRegAlamat] = useState('');
+  const [regKlinis, setRegKlinis] = useState('');
+  const [regPengirimId, setRegPengirimId] = useState('');
+  const [regPaketIds, setRegPaketIds] = useState<string[]>([]);
+  const [regSharingAmount, setRegSharingAmount] = useState('0');
+  const [regAdmin, setRegAdmin] = useState('');
+  const [regAnalisId, setRegAnalisId] = useState('');
+  const [regLabRows, setRegLabRows] = useState<LabTableRow[]>([]);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+
+  // Master Paket state
+  const [paketModalOpen, setPaketModalOpen] = useState(false);
+  const [paketList, setPaketList] = useState<PaketLabData[]>([]);
+  const [paketLoading, setPaketLoading] = useState(false);
+  const [editPaket, setEditPaket] = useState<PaketLabData | null>(null);
+  const [editItemRows, setEditItemRows] = useState<{ grup: string; pemeriksaan: string; nilaiRujukan: string }[]>([]);
+  const [newPaketNama, setNewPaketNama] = useState('');
+  const [paketSaving, setPaketSaving] = useState(false);
+  const [paketError, setPaketError] = useState<string | null>(null);
+  const [deletePaketTarget, setDeletePaketTarget] = useState<PaketLabData | null>(null);
+  const [deletePaketLoading, setDeletePaketLoading] = useState(false);
+
+  const loadAnalis = useCallback(async () => {
+    try {
+      const res = await apiGet<PaginatedResponse<PetugasLabItem>>('/api/petugas-lab?page=1&limit=200');
+      setAnalisList(res.items);
+    } catch {
+      setAnalisList([]);
+    }
+  }, []);
+
+  const loadPaketList = useCallback(async () => {
+    setPaketLoading(true);
+    try {
+      const res = await apiGet<{ items: PaketLabData[] }>('/api/paket-lab');
+      setPaketList(res.items);
+    } catch {
+      setPaketList([]);
+    } finally {
+      setPaketLoading(false);
+    }
+  }, []);
+
+  const loadRegistrationMasters = useCallback(async () => {
+    try {
+      const [pendRes, dokRes, staffRes] = await Promise.all([
+        apiGet<PaginatedResponse<PendaftaranUmumItem>>('/api/pendaftaran-umum?page=1&limit=300'),
+        apiGet<PaginatedResponse<Dokter>>('/api/dokter?page=1&limit=200'),
+        apiGet<PaginatedResponse<Staff>>('/api/staff?page=1&limit=200'),
+      ]);
+      setPendaftaranList(pendRes.items);
+      setDokterList(dokRes.items);
+      setStaffList(staffRes.items);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAnalis();
+    void loadPaketList();
+    void loadRegistrationMasters();
+    void loadLogoDataUrl().then(setLogoSrc).catch(() => setLogoSrc(''));
+  }, [loadAnalis, loadPaketList, loadRegistrationMasters]);
+
+  function openEdit(item: LabPasienItem) {
+    setSelected(item);
+    const parsed = parseLabKesan(item.kesan);
+    setLabRows(parsed.rows.length > 0 ? parsed.rows : Array.from(DEFAULT_LAB_TABLE_ROWS));
+    setAnalisId(parsed.analisId || '');
+    setAnalisNama(parsed.analisNama || '');
+    setHasilStatus(item.hasilStatus);
+    setPaymentStatus(item.paymentStatus);
+  }
+
+  function handleRowChange(index: number, field: keyof LabTableRow, value: string) {
+    setLabRows((prev) => {
+      const updated = [...prev];
+      const target = updated[index];
+      if (target) {
+        let nextRow = { ...target, [field]: value };
+        if (field === 'pemeriksaan') {
+          const match = lookupLabReference(value, paketList);
+          if (match) {
+            nextRow = {
+              ...nextRow,
+              klasifikasi: match.klasifikasi,
+              nilaiRujukan: match.nilaiRujukan,
+            };
+          }
+        }
+        updated[index] = nextRow;
+      }
+      return updated;
+    });
+  }
+
+  function handleAddRow() {
+    setLabRows((prev) => [
+      ...prev,
+      { id: String(Date.now()), klasifikasi: '', pemeriksaan: '', hasil: '', nilaiRujukan: '' },
+    ]);
+  }
+
+  function handleRemoveRow(index: number) {
+    setLabRows((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selected) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const selectedAnalis = analisList.find((a) => a.id === analisId);
+      const finalAnalisNama = selectedAnalis ? selectedAnalis.nama : analisNama;
+      const formattedRows = labRows.map((r) => ({
+        ...r,
+        hasil: formatAbnormalResult(r.hasil, r.nilaiRujukan, selected?.jenisKelamin),
+      }));
+      const serialized = serializeLabKesan(formattedRows, '', finalAnalisNama, analisId);
+      await apiPatch(`/api/pasien/${selected.id}`, {
+        kesan: serialized,
+        hasilStatus,
+        paymentStatus,
+      });
+      setSelected(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan hasil laboratorium');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handlePrint(item: LabPasienItem) {
+    setPrintingId(item.id);
+    try {
+      await printLabReport(item.id);
+    } catch (err) {
+      console.error('Print error:', err);
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
+  async function handleDuplikat() {
+    if (!duplikatTarget) return;
+    setDuplikatLoading(true);
+    setError(null);
+    try {
+      await apiPost('/api/pasien', {
+        nama: duplikatTarget.nama,
+        tanggalLahir: duplikatTarget.tanggalLahir,
+        noTelepon: duplikatTarget.noTelepon ?? undefined,
+        alamat: duplikatTarget.alamat ?? undefined,
+        pengirimId: duplikatTarget.pengirim.id,
+        klinis: duplikatTarget.klinis ?? undefined,
+        jenisPemeriksaanIds: duplikatTarget.pemeriksaan.map((p) => p.jenisPemeriksaanId),
+        radiologId: duplikatTarget.radiolog?.id ?? undefined,
+      });
+      setDuplikatTarget(null);
+      await reload();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal menduplikat data laboratorium');
+    } finally {
+      setDuplikatLoading(false);
+    }
+  }
+
+
+  function handlePendaftaranSelect(id: string) {
+    const p = pendaftaranList.find(x => x.id === id);
+    if (!p) {
+      setRegNama('');
+      setRegAlamat('');
+      setRegNoTelepon('');
+      setRegKlinis('');
+      setRegTanggalLahir('');
+      setRegPengirimId('');
+      setRegSharingAmount('0');
+      setRegAdmin('');
+      return;
+    }
+    setRegNama(p.namaPasien || '');
+    setRegAlamat(p.alamat || '');
+    setRegNoTelepon(p.telpon || '');
+    setRegKlinis(p.klinis || '');
+    if (p.tanggalMasuk) {
+      try {
+        const d = new Date(p.tanggalMasuk);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        setRegTanggalLahir(`${yyyy}-${mm}-${dd}`);
+      } catch {
+        setRegTanggalLahir('');
+      }
+    } else if (p.umur) {
+      const match = p.umur.match(/(\d+)/);
+      if (match) {
+        const years = parseInt(match[1], 10);
+        const y = new Date().getFullYear() - years;
+        setRegTanggalLahir(`${y}-01-01`);
+      } else {
+        setRegTanggalLahir('');
+      }
+    } else {
+      setRegTanggalLahir('');
+    }
+    if (p.dokterPengirim) {
+      const dok = dokterList.find(d => d.nama.toLowerCase().includes(p.dokterPengirim!.toLowerCase()));
+      if (dok) { setRegPengirimId(dok.id); setRegSharingAmount(dok.defaultSharingAmount); }
+      else { setRegPengirimId(''); setRegSharingAmount('0'); }
+    } else {
+      setRegPengirimId(''); setRegSharingAmount('0');
+    }
+    if (p.admin) {
+      const st = staffList.find(s => s.nama.toLowerCase().includes(p.admin!.toLowerCase()));
+      if (st) setRegAdmin(st.id);
+      else setRegAdmin(p.admin);
+    } else {
+      setRegAdmin('');
+    }
+  }
+
+  async function handleRegisterPasien(e: React.FormEvent) {
+    e.preventDefault();
+    setRegSaving(true);
+    setError(null);
+    try {
+      const res = await apiPost<{ item: { id: string } }>('/api/pasien', {
+        nama: regNama,
+        tanggalLahir: regTanggalLahir,
+        noTelepon: regNoTelepon || undefined,
+        alamat: regAlamat || undefined,
+        pengirimId: regPengirimId,
+        klinis: serializeKlinisData(regKlinis, [], []),
+        jenisPemeriksaanIds: regPaketIds.length > 0 ? regPaketIds : undefined,
+        sharingAmount: Number(regSharingAmount),
+        admin: regAdmin || undefined,
+      });
+
+      if (regLabRows.length > 0) {
+        const selectedAnalis = analisList.find((a) => a.id === regAnalisId);
+        const analisNama = selectedAnalis ? selectedAnalis.nama : '';
+        const serialized = serializeLabKesan(regLabRows, regKlinis, analisNama, regAnalisId);
+        
+        await apiPatch(`/api/pasien/${res.item.id}`, {
+          kesan: serialized,
+          hasilStatus: 'SELESAI',
+        });
+      }
+
+      setRegModalOpen(false);
+      await reload({ resetPage: true });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal mendaftar pasien');
+    } finally {
+      setRegSaving(false);
+    }
+  }
+
+  async function handleCreatePaket(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newPaketNama.trim()) return;
+    setPaketSaving(true);
+    setPaketError(null);
+    try {
+      await apiPost<{ item: PaketLabData }>('/api/paket-lab', { nama: newPaketNama.trim() });
+      setNewPaketNama('');
+      await loadPaketList();
+    } catch (err: unknown) {
+      setPaketError(err instanceof Error ? err.message : 'Gagal membuat paket');
+    } finally {
+      setPaketSaving(false);
+    }
+  }
+
+  async function handleDeletePaket() {
+    if (!deletePaketTarget) return;
+    setDeletePaketLoading(true);
+    setPaketError(null);
+    try {
+      await apiDelete(`/api/paket-lab/${deletePaketTarget.id}`);
+      setDeletePaketTarget(null);
+      if (editPaket?.id === deletePaketTarget.id) setEditPaket(null);
+      await loadPaketList();
+    } catch (err: unknown) {
+      setPaketError(err instanceof Error ? err.message : 'Gagal menghapus paket');
+    } finally {
+      setDeletePaketLoading(false);
+    }
+  }
+
+  async function handleSavePaketItems() {
+    if (!editPaket) return;
+    setPaketSaving(true);
+    setPaketError(null);
+    try {
+      await apiPut(`/api/paket-lab/${editPaket.id}/items`, {
+        items: editItemRows
+          .filter((r) => r.pemeriksaan.trim() !== '')
+          .map((r, i) => ({ grup: r.grup || undefined, pemeriksaan: r.pemeriksaan, nilaiRujukan: r.nilaiRujukan, urutan: i })),
+      });
+      await loadPaketList();
+      setEditPaket(null);
+    } catch (err: unknown) {
+      setPaketError(err instanceof Error ? err.message : 'Gagal menyimpan item paket');
+    } finally {
+      setPaketSaving(false);
+    }
+  }
+
+  function openEditPaket(p: PaketLabData) {
+    setEditPaket(p);
+    setEditItemRows(
+      p.items.length > 0
+        ? p.items.map((it) => ({ grup: it.grup ?? '', pemeriksaan: it.pemeriksaan, nilaiRujukan: it.nilaiRujukan }))
+        : [{ grup: '', pemeriksaan: '', nilaiRujukan: '' }],
+    );
+    setPaketError(null);
+  }
+
+  function applyPaketFromDB(p: PaketLabData) {
+    const newRows: LabTableRow[] = p.items.map((it, i) => ({
+      id: `db-${p.id}-${i}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      klasifikasi: p.nama,
+      pemeriksaan: it.pemeriksaan,
+      hasil: '',
+      nilaiRujukan: it.nilaiRujukan,
+    }));
+    setLabRows((prev) => {
+      const filtered = prev.filter((r) => r.pemeriksaan.trim() !== '' || r.hasil.trim() !== '');
+      return [...filtered, ...newRows];
+    });
+  }
+
+  const waitingCount = items.filter((i) => i.hasilStatus === 'MENUNGGU_HASIL').length;
+  const doneCount = items.filter((i) => i.hasilStatus === 'SELESAI').length;
+
+  // Build preview data from previewItem (read from saved kesan)
+  const previewData: LabReportData | null = previewItem
+    ? (() => {
+        const parsed = parseLabKesan(previewItem.kesan);
+        return {
+          logoSrc,
+          regCode: previewItem.regCode,
+          dokterNama: previewItem.pengirim?.nama || '—',
+          tanggalPemeriksaan: formatDateDisplay(previewItem.createdAt),
+          namaPasien: previewItem.nama,
+          umurLabel: `${formatUmurTahun(previewItem.umur)} (${previewItem.jenisKelamin})`,
+          alamat: previewItem.alamat || '—',
+          labResultsText: undefined,
+          rows: groupLabRowsForPdf(parsed.rows, previewItem.jenisKelamin),
+          petugasLabNama: parsed.analisNama || undefined,
+        };
+      })()
+    : null;
+
+  return (
+    <ListPageShell
+      title="Pekerjaan Laboratorium"
+      metrics={[
+        {
+          label: 'Total registrasi pasien',
+          value: String(pagination.total),
+          tone: 'blue',
+          iconKind: 'clipboard',
+        },
+        {
+          label: 'Menunggu hasil lab',
+          value: String(waitingCount),
+          tone: 'violet',
+          iconKind: 'stethoscope',
+        },
+        {
+          label: 'Selesai pemeriksaan',
+          value: String(doneCount),
+          tone: 'green',
+          iconKind: 'document',
+        },
+      ]}
+      searchPlaceholder="Cari nama pasien, reg code, alamat..."
+      searchValue={search}
+      onSearchChange={setSearch}
+      onRefresh={() => void reload()}
+      error={error}
+      loading={loading}
+      pagination={pagination}
+      onPageChange={setPage}
+      action={
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            onClick={() => setPaketModalOpen(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
+          >
+            ⚙️ Master Paket
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={() => {
+                            setRegNama('');
+              setRegTanggalLahir('');
+              setRegNoTelepon('');
+              setRegAlamat('');
+              setRegKlinis('');
+              setRegPengirimId('');
+                            setRegSharingAmount('0');
+              setRegAdmin('');
+              setRegAnalisId('');
+              setRegLabRows([]);
+              setRegModalOpen(true);
+              void loadRegistrationMasters();
+            }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
+          >
+            + Registrasi Pasien Lab
+          </button>
+        </div>
+      }
+    >
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Reg Code & Tanggal</th>
+            <th>Nama Pasien</th>
+            <th>Umur / JK</th>
+            <th>Dokter Pengirim</th>
+            <th>Hasil Pemeriksaan</th>
+            <th>Status Hasil</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.length === 0 ? (
+            <tr>
+              <td colSpan={8} style={{ textAlign: 'center', padding: '2rem' }}>
+                Belum ada data pendaftaran pasien laboratorium.
+              </td>
+            </tr>
+          ) : (
+            items.map((item, idx) => (
+              <tr key={item.id}>
+                <td>{(pagination.page - 1) * pagination.limit + idx + 1}</td>
+                <td>
+                  <strong>{item.regCode}</strong>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                    {formatDateDisplay(item.createdAt)}
+                  </div>
+                </td>
+                <td>
+                  <strong>{item.nama}</strong>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                    {item.alamat || '—'}
+                  </div>
+                </td>
+                <td>
+                  {formatUmurTahun(item.umur)} ({item.jenisKelamin})
+                </td>
+                <td>{item.pengirim.nama}</td>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.6rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
+                      {/* Nama Pemeriksaan Laboratorium */}
+                      {item.pemeriksaan.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem', marginBottom: '0.15rem' }}>
+                          {item.pemeriksaan.map((p) => (
+                            <span
+                              key={p.id}
+                              style={{
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                padding: '0.1rem 0.45rem',
+                                borderRadius: '999px',
+                                background: 'var(--color-primary-soft, #ede9fe)',
+                                color: 'var(--color-primary, #7c3aed)',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {p.nama}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {/* Hasil atau placeholder */}
+                      {(() => {
+                        const parsed = parseLabKesan(item.kesan);
+                        const hasResult = parsed.rows.some((r) => r.hasil.trim() !== '');
+                        if (hasResult) {
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                              {parsed.rows
+                                .filter((r) => r.hasil.trim() !== '' || r.pemeriksaan.trim() !== '')
+                                .slice(0, 3)
+                                .map((r, i) => (
+                                  <span key={i} style={{ fontSize: '0.82rem' }}>
+                                    <strong>{r.pemeriksaan}:</strong> {r.hasil || '—'}{' '}
+                                    {r.nilaiRujukan ? (
+                                      <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+                                        ({r.nilaiRujukan})
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ))}
+                              {parsed.rows.length > 3 && (
+                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                                  +{parsed.rows.length - 3} pemeriksaan lainnya
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        return (
+                          <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                            Belum ada hasil
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => openEdit(item)}
+                      style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0 }}
+                      title="Edit Hasil Pemeriksaan Lab"
+                    >
+                      ✏️ Edit
+                    </button>
+                  </div>
+                </td>
+                <td>
+                  <span
+                    className={`badge badge--${item.hasilStatus === 'SELESAI' ? 'green' : 'yellow'}`}
+                  >
+                    {item.hasilStatus === 'SELESAI' ? 'SELESAI' : 'MENUNGGU HASIL'}
+                  </span>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => openEdit(item)}
+                    >
+                      ⚡ Hasil Lab
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      onClick={() => setPreviewItem(item)}
+                      title="Preview & Cetak hasil lab"
+                    >
+                      🖨️ Preview & Cetak
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => setDuplikatTarget(item)}
+                      title="Duplikat registrasi laboratorium ini"
+                      style={{ border: '1px solid var(--color-border)' }}
+                    >
+                      📋 Duplikat
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+
+      {/* Edit Modal: form only, no preview */}
+      {selected && (
+        <Modal
+          title={`Input Hasil Laboratorium — ${selected.nama} (${selected.regCode})`}
+          open={true}
+          onClose={() => setSelected(null)}
+          size="xl"
+        >
+          {/* Top section: Form full-width */}
+          <form onSubmit={(e) => void handleSave(e)}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem 1.25rem', marginBottom: '1rem' }}>
+              <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+                <label>Klinis Pasien</label>
+                <input type="text" value={formatKlinisDisplay(selected.klinis) || '—'} disabled />
+              </div>
+
+              {/* Interactive Table for Lab Tests (full width) */}
+              <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <label style={{ margin: 0, fontWeight: 'bold' }}>Tabel Hasil Pemeriksaan (Pemeriksaan | Hasil | Nilai Rujukan)</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    
+                    {(paketList.length > 0
+                      ? paketList
+                      : PAKET_PEMERIKSAAN_LAB.map((p) => ({
+                          id: p.id,
+                          nama: p.label,
+                          urutan: 0,
+                          items: p.items.map((it, idx) => ({
+                            id: `${idx}`,
+                            grup: p.label,
+                            pemeriksaan: it.pemeriksaan,
+                            nilaiRujukan: it.nilaiRujukan,
+                            urutan: idx,
+                          })),
+                        }))
+                    ).map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => applyPaketFromDB(p)}
+                        title={`Terapkan paket: ${p.nama}`}
+                        style={{ background: '#e0f2fe', color: '#0369a1', border: '1px solid #38bdf8', fontWeight: 700 }}
+                      >
+                        ⚡ {p.nama}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={handleAddRow}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                    >
+                      <span>+</span> Tambah Baris
+                    </button>
+                  </div>
+                </div>
+                <div style={{ overflowY: 'auto', maxHeight: '240px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-card)' }}>
+                  <table className="data-table" style={{ fontSize: '0.85rem', marginBottom: 0 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '25%' }}>Klasifikasi Pemeriksaan</th>
+                        <th style={{ width: '30%' }}>Pemeriksaan</th>
+                        <th style={{ width: '20%' }}>Hasil</th>
+                        <th style={{ width: '20%' }}>Nilai Rujukan</th>
+                        <th style={{ width: '5%', textAlign: 'center' }}>Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {labRows.map((row, index) => (
+                        <tr key={row.id}>
+                          <td style={{ padding: '0.3rem 0.4rem' }}>
+                            <input
+                              type="text"
+                              list="list-klasifikasi-lab"
+                              value={row.klasifikasi || ''}
+                              onChange={(e) => handleRowChange(index, 'klasifikasi', e.target.value)}
+                              placeholder="Klasifikasi..."
+                              style={{ width: '100%', padding: '0.3rem 0.45rem', fontSize: '0.83rem', backgroundColor: '#e0f2fe', color: '#0369a1', fontWeight: 600, border: '1px solid #38bdf8', borderRadius: '4px' }}
+                            />
+                          </td>
+                          <td style={{ padding: '0.3rem 0.4rem' }}>
+                            <input
+                              type="text"
+                              list="list-pemeriksaan-lab"
+                              value={row.pemeriksaan}
+                              onChange={(e) => handleRowChange(index, 'pemeriksaan', e.target.value)}
+                              placeholder="Nama pemeriksaan..."
+                              style={{ width: '100%', padding: '0.3rem 0.45rem', fontSize: '0.83rem', fontWeight: 600 }}
+                            />
+                          </td>
+                          <td style={{ padding: '0.3rem 0.4rem' }}>
+                            <input
+                              type="text"
+                              value={row.hasil}
+                              onChange={(e) => handleRowChange(index, 'hasil', e.target.value)}
+                              onBlur={(e) => {
+                                const formatted = formatAbnormalResult(
+                                  e.target.value,
+                                  row.nilaiRujukan,
+                                  previewItem?.jenisKelamin,
+                                );
+                                if (formatted !== row.hasil) {
+                                  handleRowChange(index, 'hasil', formatted);
+                                }
+                              }}
+                              placeholder="Hasil lab..."
+                              style={{
+                                width: '100%',
+                                padding: '0.3rem 0.45rem',
+                                fontSize: '0.83rem',
+                                fontWeight: 'bold',
+                                color: isLabResultAbnormal(
+                                  row.hasil,
+                                  row.nilaiRujukan,
+                                  previewItem?.jenisKelamin,
+                                )
+                                  ? '#dc2626'
+                                  : 'var(--color-primary)',
+                                background: isLabResultAbnormal(
+                                  row.hasil,
+                                  row.nilaiRujukan,
+                                  previewItem?.jenisKelamin,
+                                )
+                                  ? '#fef2f2'
+                                  : undefined,
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: '0.3rem 0.4rem' }}>
+                            <input
+                              type="text"
+                              value={row.nilaiRujukan}
+                              onChange={(e) => handleRowChange(index, 'nilaiRujukan', e.target.value)}
+                              placeholder="Nilai rujukan..."
+                              style={{ width: '100%', padding: '0.3rem 0.45rem', fontSize: '0.83rem' }}
+                            />
+                          </td>
+                          <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--sm"
+                              onClick={() => handleRemoveRow(index)}
+                              title="Hapus baris"
+                              style={{ color: '#ef4444', padding: '0.2rem 0.45rem' }}
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <datalist id="list-klasifikasi-lab">
+                    {Array.from(
+                      new Set([
+                        ...paketList.map((p) => p.nama),
+                        ...PAKET_PEMERIKSAAN_LAB.map((p) => p.label),
+                      ]),
+                    ).map((label) => (
+                      <option key={label} value={label} />
+                    ))}
+                  </datalist>
+                  <datalist id="list-pemeriksaan-lab">
+                    {Array.from(
+                      new Set([
+                        ...paketList.flatMap((p) => p.items.map((it) => it.pemeriksaan)),
+                        ...PAKET_PEMERIKSAAN_LAB.flatMap((p) => p.items.map((it) => it.pemeriksaan)),
+                      ]),
+                    ).map((pem) => (
+                      <option key={pem} value={pem} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              {/* Selector Analis */}
+              <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+                <label htmlFor="lab-analis-pemeriksa">Analis Pemeriksa</label>
+                <select
+                  id="lab-analis-pemeriksa"
+                  value={analisId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setAnalisId(id);
+                    const found = analisList.find((a) => a.id === id);
+                    if (found) setAnalisNama(found.nama);
+                    else setAnalisNama('');
+                  }}
+                >
+                  <option value="">Pilih analis laboratorium...</option>
+                  {analisList.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nama} {a.nip ? `(NIP: ${a.nip})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="lab-hasil-status">Status Hasil</label>
+                <select id="lab-hasil-status" value={hasilStatus}
+                  onChange={(e) => setHasilStatus(e.target.value as 'MENUNGGU_HASIL' | 'SELESAI')}>
+                  <option value="MENUNGGU_HASIL">MENUNGGU HASIL</option>
+                  <option value="SELESAI">SELESAI</option>
+                </select>
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="lab-payment-status">Status Pembayaran</label>
+                <select id="lab-payment-status" value={paymentStatus}
+                  onChange={(e) => setPaymentStatus(e.target.value as 'BELUM_LUNAS' | 'LUNAS')}>
+                  <option value="BELUM_LUNAS">BELUM LUNAS</option>
+                  <option value="LUNAS">LUNAS</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Footer: Simpan + Batal */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', borderTop: '1px solid var(--color-border)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => setSelected(null)}
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="btn btn--secondary"
+                disabled={saving}
+              >
+                {saving ? 'Menyimpan...' : '💾 Simpan Hasil Lab'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Preview-only Modal */}
+      {previewItem && previewData && (
+        <Modal
+          title={`Preview Hasil Lab — ${previewItem.nama} (${previewItem.regCode})`}
+          open={true}
+          onClose={() => setPreviewItem(null)}
+          size="xl"
+        >
+          {/* Header: label + Cetak button */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <label style={{ fontWeight: 'bold', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
+              🖨️ Pratinjau Cetak PDF
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => { setPreviewItem(null); openEdit(previewItem); }}
+              >
+                ✏️ Edit Hasil
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                onClick={() => void handlePrint(previewItem)}
+                disabled={printingId === previewItem.id}
+              >
+                {printingId === previewItem.id ? 'Membuat PDF...' : '🖨️ Cetak PDF'}
+              </button>
+            </div>
+          </div>
+
+          {/* Full-width PDF Viewer */}
+          <div style={{
+            width: '100%',
+            height: '600px',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-card)',
+            overflow: 'hidden',
+            background: '#525659',
+            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
+          }}>
+            <PDFViewer style={{ width: '100%', height: '100%', border: 'none' }}>
+              <LabReportDocument data={previewData} />
+            </PDFViewer>
+          </div>
+        </Modal>
+      )}
+      <ConfirmModal
+        open={duplikatTarget !== null}
+        title="Duplikat Laboratorium"
+        message={`Duplikat registrasi lab untuk "${duplikatTarget?.nama ?? ''}" (${duplikatTarget?.regCode ?? ''})? Data baru akan dibuat dengan reg code baru, status MENUNGGU HASIL, dan hasil dikosongkan.`}
+        confirmLabel="Ya, Duplikat"
+        loading={duplikatLoading}
+        onClose={() => setDuplikatTarget(null)}
+        onConfirm={() => void handleDuplikat()}
+      />
+
+      {/* ─── Master Paket Pemeriksaan Modal ─────────────────────────────────── */}
+      <Modal
+        open={paketModalOpen}
+        title="Master Paket Pemeriksaan Laboratorium"
+        onClose={() => { setPaketModalOpen(false); setEditPaket(null); setPaketError(null); }}
+        size="xl"
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '1.25rem', minHeight: '400px' }}>
+          {/* Left: daftar paket */}
+          <div style={{ borderRight: '1px solid var(--color-border)', paddingRight: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <form onSubmit={(e) => void handleCreatePaket(e)} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>Buat Paket Baru</label>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <input
+                  type="text"
+                  value={newPaketNama}
+                  onChange={(e) => setNewPaketNama(e.target.value)}
+                  placeholder="Nama paket..."
+                  style={{ flex: 1, padding: '0.45rem 0.65rem', fontSize: '0.85rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-button)' }}
+                />
+                <button type="submit" className="btn btn--primary btn--sm" disabled={paketSaving || !newPaketNama.trim()}>
+                  {paketSaving ? '...' : '+'}
+                </button>
+              </div>
+            </form>
+            {paketError && <p style={{ color: '#ef4444', fontSize: '0.8rem', margin: 0 }}>{paketError}</p>}
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)', borderTop: '1px solid var(--color-border)', paddingTop: '0.6rem' }}>
+              Daftar Paket ({paketList.length})
+            </div>
+            {paketLoading ? (
+              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>Memuat...</p>
+            ) : paketList.length === 0 ? (
+              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontStyle: 'italic' }}>Belum ada paket</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', overflowY: 'auto', maxHeight: '320px' }}>
+                {paketList.map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.5rem 0.65rem',
+                      borderRadius: 'var(--radius-button)',
+                      background: editPaket?.id === p.id ? 'var(--color-primary-soft)' : 'var(--color-bg-page)',
+                      border: `1px solid ${editPaket?.id === p.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => openEditPaket(p)}
+                  >
+                    <span style={{ fontSize: '0.85rem', fontWeight: editPaket?.id === p.id ? 600 : 400 }}>{p.nama}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setDeletePaketTarget(p); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.9rem', padding: '0 0.25rem', lineHeight: 1 }}
+                      title="Hapus paket"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right: edit items paket */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {!editPaket ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-muted)', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                Pilih paket di kiri untuk mengedit item pemeriksaannya
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem' }}>Items: <strong>{editPaket.nama}</strong></h4>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => setEditItemRows((r) => [...r, { grup: '', pemeriksaan: '', nilaiRujukan: '' }])}
+                  >
+                    + Tambah Baris
+                  </button>
+                </div>
+                <div style={{ overflowY: 'auto', maxHeight: '320px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-card)' }}>
+                  <table className="data-table" style={{ fontSize: '0.83rem', marginBottom: 0 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '25%' }}>Grup/Header</th>
+                        <th style={{ width: '40%' }}>Nama Pemeriksaan</th>
+                        <th style={{ width: '25%' }}>Nilai Rujukan</th>
+                        <th style={{ width: '10%', textAlign: 'center' }}>Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editItemRows.map((row, i) => (
+                        <tr key={i}>
+                          <td style={{ padding: '0.25rem 0.4rem' }}>
+                            <input
+                              type="text"
+                              value={row.grup}
+                              onChange={(e) => setEditItemRows((r) => r.map((x, j) => j === i ? { ...x, grup: e.target.value } : x))}
+                              placeholder="Grup (opsional)"
+                              style={{ width: '100%', padding: '0.25rem 0.4rem', fontSize: '0.82rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                            />
+                          </td>
+                          <td style={{ padding: '0.25rem 0.4rem' }}>
+                            <input
+                              type="text"
+                              value={row.pemeriksaan}
+                              onChange={(e) => setEditItemRows((r) => r.map((x, j) => j === i ? { ...x, pemeriksaan: e.target.value } : x))}
+                              placeholder="Nama pemeriksaan"
+                              style={{ width: '100%', padding: '0.25rem 0.4rem', fontSize: '0.82rem', border: '1px solid var(--color-border)', borderRadius: '4px', fontWeight: 500 }}
+                            />
+                          </td>
+                          <td style={{ padding: '0.25rem 0.4rem' }}>
+                            <input
+                              type="text"
+                              value={row.nilaiRujukan}
+                              onChange={(e) => setEditItemRows((r) => r.map((x, j) => j === i ? { ...x, nilaiRujukan: e.target.value } : x))}
+                              placeholder="Nilai rujukan"
+                              style={{ width: '100%', padding: '0.25rem 0.4rem', fontSize: '0.82rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                            />
+                          </td>
+                          <td style={{ padding: '0.25rem 0.4rem', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => setEditItemRows((r) => r.filter((_, j) => j !== i))}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '1rem' }}
+                              title="Hapus baris"
+                            >✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', borderTop: '1px solid var(--color-border)', paddingTop: '0.75rem' }}>
+                  <button type="button" className="btn btn--ghost" onClick={() => setEditPaket(null)}>Batal</button>
+                  <button type="button" className="btn btn--primary" disabled={paketSaving} onClick={() => void handleSavePaketItems()}>
+                    {paketSaving ? 'Menyimpan...' : '💾 Simpan Items'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Registrasi Lab */}
+      {regModalOpen && (
+        <Modal
+          title="Registrasi Pasien Laboratorium"
+          open={true}
+          onClose={() => setRegModalOpen(false)}
+          size="lg"
+        >
+          <form onSubmit={(e) => void handleRegisterPasien(e)} className="form-grid">
+            <div className="form-field form-field--full" style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--color-border)' }}>
+              <label style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Pilih dari Pendaftaran Umum (Opsional)</label>
+              <select 
+                onChange={(e) => {
+                  handlePendaftaranSelect(e.target.value);
+                }}
+                style={{ marginTop: '0.5rem' }}
+              >
+                <option value="">-- Ketik Data Baru / Manual --</option>
+                {pendaftaranList.map(p => (
+                  <option key={p.id} value={p.id}>{p.namaPasien} - {p.telpon || 'Tanpa No.Telp'}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="rNama">Nama Pasien *</label>
+              <input id="rNama" required value={regNama} onChange={(e) => setRegNama(e.target.value)} />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="rTgl">Tanggal Lahir *</label>
+              <input id="rTgl" type="date" required value={regTanggalLahir} onChange={(e) => setRegTanggalLahir(e.target.value)} />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="rTelp">No. Telepon</label>
+              <input id="rTelp" value={regNoTelepon} onChange={(e) => setRegNoTelepon(e.target.value)} />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="rDok">Dokter Pengirim *</label>
+              <select id="rDok" required value={regPengirimId} onChange={(e) => {
+                const id = e.target.value;
+                setRegPengirimId(id);
+                const d = dokterList.find(x => x.id === id);
+                if (d) setRegSharingAmount(d.defaultSharingAmount);
+              }}>
+                <option value="">-- Pilih Dokter --</option>
+                {dokterList.map(d => (
+                  <option key={d.id} value={d.id}>{d.nama}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-field form-field--full">
+              <label htmlFor="rAlamat">Alamat Lengkap</label>
+              <textarea id="rAlamat" rows={2} value={regAlamat} onChange={(e) => setRegAlamat(e.target.value)} />
+            </div>
+
+            <div className="form-field form-field--full">
+              <label htmlFor="rKlinis">Klinis (Keterangan)</label>
+              <textarea id="rKlinis" rows={2} value={regKlinis} onChange={(e) => setRegKlinis(e.target.value)} />
+            </div>
+
+            <div className="form-field form-field--full" style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-card)' }}>
+              <label style={{ fontWeight: 600, marginBottom: '0.5rem', display: 'block' }}>2. Pilih Jenis Pemeriksaan Lab (Paket) *</label>
+              <div className="checkbox-list" style={{ flexDirection: 'row', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto' }}>
+                {paketList.map((p) => (
+                  <label key={p.id} style={{ minWidth: '180px' }}>
+                    <input
+                      type="checkbox"
+                      checked={regPaketIds.includes(p.id)}
+                      onChange={() => {
+                        setRegPaketIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]);
+                      }}
+                    />
+                    {p.nama}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', borderTop: '1px solid var(--color-border)', paddingTop: '1rem', marginTop: '0.5rem', gridColumn: '1 / -1' }}>
+              <button type="button" className="btn btn--ghost" onClick={() => setRegModalOpen(false)}>
+                Batal
+              </button>
+              <button type="submit" className="btn btn--primary" disabled={regSaving}>
+                {regSaving ? 'Menyimpan...' : '💾 Registrasi Pasien'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      <ConfirmModal
+        open={deletePaketTarget !== null}
+        title="Hapus Paket"
+        message={`Yakin hapus paket "${deletePaketTarget?.nama ?? ''}"? Semua item di dalamnya juga akan terhapus.`}
+        loading={deletePaketLoading}
+        onClose={() => setDeletePaketTarget(null)}
+        onConfirm={() => void handleDeletePaket()}
+      />
+    </ListPageShell>
+  );
+}

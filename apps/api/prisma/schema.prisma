@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum StaffRole {
+  ADMIN
+  KARYAWAN
+}
+
+enum HasilStatus {
+  MENUNGGU_HASIL
+  SELESAI
+}
+
+enum PaymentStatus {
+  BELUM_LUNAS
+  LUNAS
+}
+
+enum SharingType {
+  PERCENT
+  FIXED
+}
+
+model Dokter {
+  id                    String   @id @default(cuid())
+  nama                  String
+  spesialisasi          String?
+  noTelepon             String?
+  defaultSharingAmount  Decimal  @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  pasien                Pasien[]
+}
+
+model Radiolog {
+  id        String   @id @default(cuid())
+  nama      String
+  noTelepon String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  pasien    Pasien[] @relation("PasienRadiolog")
+}
+
+model PetugasLab {
+  id        String   @id @default(cuid())
+  nama      String
+  nip       String?
+  noTelepon String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model JenisPemeriksaan {
+  id        String              @id @default(cuid())
+  nama      String              @unique
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  harga     HargaLayanan?
+  pasienItems PasienPemeriksaan[]
+}
+
+model HargaLayanan {
+  id                 String           @id @default(cuid())
+  jenisPemeriksaanId String           @unique
+  jenisPemeriksaan   JenisPemeriksaan @relation(fields: [jenisPemeriksaanId], references: [id], onDelete: Cascade)
+  harga              Decimal
+  detailLayanan      String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model KesanTemplate {
+  id        String   @id @default(cuid())
+  judul     String
+  isi       String
+  gambar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Staff {
+  id           String    @id @default(cuid())
+  nama         String
+  email        String    @unique
+  passwordHash String    @default("")
+  role         StaffRole @default(KARYAWAN)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Pasien {
+  id              String        @id @default(cuid())
+  regCode         String        @unique
+  nama            String
+  tanggalLahir    DateTime
+  noTelepon       String?
+  alamat          String?
+  pengirimId      String
+  pengirim        Dokter        @relation(fields: [pengirimId], references: [id])
+  klinis          String?
+  hasilStatus     HasilStatus   @default(MENUNGGU_HASIL)
+  paymentStatus   PaymentStatus @default(BELUM_LUNAS)
+  sharingType     SharingType   @default(PERCENT)
+  sharingPercent  Decimal       @default(0)
+  sharingAmount   Decimal?
+  totalHarga      Decimal       @default(0)
+  totalSharing    Decimal       @default(0)
+  sharingLocked   Boolean       @default(false)
+  kesan           String?
+  admin           String?
+  radiologId      String?
+  radiolog        Radiolog?     @relation("PasienRadiolog", fields: [radiologId], references: [id])
+  pemeriksaan     PasienPemeriksaan[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model PasienPemeriksaan {
+  id                 String           @id @default(cuid())
+  pasienId           String
+  pasien             Pasien           @relation(fields: [pasienId], references: [id], onDelete: Cascade)
+  jenisPemeriksaanId String
+  jenisPemeriksaan   JenisPemeriksaan @relation(fields: [jenisPemeriksaanId], references: [id])
+  hargaSnapshot      Decimal
+
+  @@unique([pasienId, jenisPemeriksaanId])
+}
+
+model PaketLab {
+  id        String         @id @default(cuid())
+  nama      String         @unique
+  harga     Decimal        @default(0)
+  urutan    Int            @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  items     PaketLabItem[]
+}
+
+model PaketLabItem {
+  id           String   @id @default(cuid())
+  paketId      String
+  paket        PaketLab @relation(fields: [paketId], references: [id], onDelete: Cascade)
+  grup         String?
+  pemeriksaan  String
+  nilaiRujukan String   @default("")
+  satuan       String   @default("")
+  harga        Decimal  @default(0)
+  urutan       Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model PendaftaranUmum {
+  id             String   @id @default(cuid())
+  noRegistrasi   String   @unique
+  namaPasien     String
+  umur           String?
+  alamat         String?
+  telpon         String?
+  tanggalMasuk   DateTime @default(now())
+  dokterPengirim String?
+  klinis         String?
+  admin          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model FarmasiBhp {
+  id         String   @id @default(cuid())
+  kode       String   @unique
+  nama       String
+  kategori   String   @default("OBAT")
+  satuan     String   @default("Pcs")
+  stok       Int      @default(0)
+  stokMin    Int      @default(10)
+  hargaBeli  Decimal  @default(0)
+  hargaJual  Decimal  @default(0)
+  keterangan String?  @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model AbsensiKaryawan {
+  id           String   @id @default(cuid())
+  namaKaryawan String
+  role         String?  @default("KARYAWAN")
+  tanggal      String
+  jamMasuk     String?  @default("08:00")
+  jamPulang    String?  @default("16:00")
+  status       String   @default("HADIR")
+  keterangan   String?  @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model KeuanganTransaksi {
+  id         String   @id @default(cuid())
+  tanggal    String
+  jenis      String   @default("MASUK")
+  kategori   String   @default("LAYANAN")
+  keterangan String
+  nominal    Decimal  @default(0)
+  referensi  String?  @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+

@@ -1,0 +1,44 @@
+name: Node.js CI/CD to Ubuntu Server
+
+on:
+  push:
+    branches: [ main, master ] # Alur otomatis jalan tiap kamu push ke branch main atau master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Deploy via SSH to dev1
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 2112 # Port SSH khusus dari Om Dede
+        script: |
+          # 1. Load environment Node.js & NVM di server biar kebaca GitHub
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          
+          # 2. Masuk ke folder project dan tarik kode terbaru dari GitHub
+          cd ~/LabPrima
+          git pull origin ${{ github.ref_name }}
+          
+          # 3. Install dependencies baru jika ada perubahan package.json
+          npm install
+          
+          # 4. Sinkronisasi skema database Prisma (jalur badak langsung di foldernya)
+          cd apps/api
+          npx prisma db push
+          cd ~/LabPrima
+          
+          # 5. Compile ulang seluruh project (Backend & Frontend Vite)
+          npm run build
+          
+          # 6. Restart background process di PM2 biar perubahannya langsung live
+          pm2 restart LabPrima
+          pm2 save
