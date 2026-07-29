@@ -483,7 +483,7 @@ export function LaboratoriumPage() {
 
   return (
     <ListPageShell
-      title="Pekerjaan Laboratorium"
+      title="Registrasi Lab"
       metrics={[
         {
           label: 'Total registrasi pasien',

@@ -61,7 +61,7 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
     iconName: 'flask',
     items: [
       { id: 'harga-pemeriksaan-lab', label: 'Harga Pemeriksaan Lab', shortLabel: 'Harga Pemeriksaan Lab' },
-      { id: 'lab', label: 'Pekerjaan Laboratorium', shortLabel: 'Pekerjaan Lab' },
+      { id: 'lab', label: 'Registrasi Lab', shortLabel: 'Registrasi Lab' },
       { id: 'paket-lab-master', label: 'Jenis Pemeriksaan Lab', shortLabel: 'Jenis Pemeriksaan Lab' },
       { id: 'petugas-lab-master', label: 'Master Petugas Laboratorium', shortLabel: 'Petugas Lab' },
       { id: 'klasifikasi-paket', label: 'Klasifikasi Paket', shortLabel: 'Klasifikasi Paket' },
@@ -94,7 +94,7 @@ export const MAIN_NAV_ITEMS: readonly NavItem[] = [
   { id: 'harga-pemeriksaan-lab', label: 'Harga Pemeriksaan Lab', shortLabel: 'Harga Pemeriksaan Lab' },
   { id: 'farmasi-bhp', label: 'Manajemen Farmasi & BHP', shortLabel: 'Stok Obat & BHP' },
   { id: 'keuangan-pembukuan', label: 'Sistem Keuangan & Pembukuan', shortLabel: 'Buku Kas & Keuangan' },
-  { id: 'lab', label: 'Pekerjaan Laboratorium', shortLabel: 'Pekerjaan Lab' },
+  { id: 'lab', label: 'Registrasi Lab', shortLabel: 'Registrasi Lab' },
   { id: 'paket-lab-master', label: 'Jenis Pemeriksaan Lab', shortLabel: 'Jenis Pemeriksaan Lab' },
   { id: 'petugas-lab-master', label: 'Master Petugas Laboratorium', shortLabel: 'Petugas Lab' },
   { id: 'klasifikasi-paket', label: 'Klasifikasi Paket', shortLabel: 'Klasifikasi Paket' },
