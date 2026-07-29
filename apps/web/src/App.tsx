@@ -19,6 +19,7 @@ import { PetugasLabPage } from './pages/PetugasLabPage.tsx';
 import { RadiologMasterPage } from './pages/RadiologMasterPage.tsx';
 import { RadiologDuplikatPage } from './pages/RadiologDuplikatPage.tsx';
 import { RadiologWorkPage } from './pages/RadiologWorkPage.tsx';
+import { CetakALPage } from './pages/CetakALPage.tsx';
 import { RolePage } from './pages/RolePage.tsx';
 import { SharingPage } from './pages/SharingPage.tsx';
 import { LaporanTahunanPage } from './pages/LaporanTahunanPage.tsx';
@@ -54,6 +55,8 @@ function renderView(viewId: AppViewId) {
       return <RadiologWorkPage />;
     case 'radiolog-duplikat':
       return <RadiologDuplikatPage />;
+    case 'cetak-al':
+      return <CetakALPage />;
     case 'dokter':
       return <DokterPage />;
     case 'jenis-pemeriksaan':
