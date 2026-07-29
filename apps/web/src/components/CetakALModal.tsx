@@ -90,10 +90,6 @@ export function CetakALModal({
               <th>Kepada Yth. TS</th>
               <td>${pasien.pengirim.nama}</td>
             </tr>
-            <tr>
-              <th>Dokter Radiologi</th>
-              <td>${pasien.radiolog?.nama || '—'}</td>
-            </tr>
           </table>
         </div>
         <div class="amplop-footer">
@@ -364,17 +360,11 @@ export function CetakALModal({
                       {jenisNames}
                     </td>
                   </tr>
-                  <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <tr>
                     <th style={{ textAlign: 'left', padding: '8px 4px', color: '#64748b' }}>
                       Kepada Yth. TS
                     </th>
                     <td style={{ padding: '8px 4px' }}>{pasien.pengirim.nama}</td>
-                  </tr>
-                  <tr>
-                    <th style={{ textAlign: 'left', padding: '8px 4px', color: '#64748b' }}>
-                      Dokter Radiologi
-                    </th>
-                    <td style={{ padding: '8px 4px' }}>{pasien.radiolog?.nama || '—'}</td>
                   </tr>
                 </tbody>
               </table>
