@@ -325,7 +325,7 @@ export function CetakALModal({
                   LABORATORIUM &amp; KLINIK PRIMA HUSADA
                 </div>
                 <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0369a1', marginTop: '0.25rem' }}>
-                  HASIL PEMERIKSAAN RADIOLOGI (AMPLOP FOTO)
+                  HASIL PEMERIKSAAN RADIOLOGI
                 </div>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -407,7 +407,7 @@ export function CetakALModal({
                   marginBottom: '0.5rem',
                 }}
               >
-                PRIMA HUSADA — RADIOLOGI (LABEL STIKER)
+                PRIMA HUSADA — RADIOLOGI
               </div>
               <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
                 {pasien.regCode}
