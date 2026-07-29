@@ -539,10 +539,10 @@ export function KeuanganPembukuanPage() {
                 desc: 'Hematologi, Kimia Darah, Diabetes, Urinalisa, Urin Rutin, Imunologi',
               },
               {
-                nama: 'Radiologi Lengkap & DICOM (Roentgen)',
+                nama: 'Radiologi Lengkap (Roentgen)',
                 porsi: 25,
                 warna: '#10b981',
-                desc: 'Thorax, Cranium, Dental, Extremity dengan pilihan bacaan & galeri gambar',
+                desc: 'Thorax, Cranium, Dental, Extremity dengan pilihan bacaan & keahlian radiolog',
               },
               {
                 nama: 'Instalasi Farmasi & Apotek Rawat Jalan',

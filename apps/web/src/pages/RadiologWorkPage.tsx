@@ -73,247 +73,37 @@ const DEFAULT_KESAN_TEMPLATES: readonly KesanTemplateItem[] = [
   },
 ];
 
-function XRayDicomViewer({
-  patientName,
-  regCode,
+function RadiologTarifSummary({
   totalHarga,
 }: {
-  readonly patientName: string;
-  readonly regCode: string;
   readonly totalHarga: string;
 }) {
-  const [xrayMode, setXrayMode] = useState<'THORAX' | 'CRANIUM' | 'DENTAL' | 'EXTREMITAS'>('THORAX');
-  const [zoom, setZoom] = useState(1);
-  const [invert, setInvert] = useState(false);
-
   const totalNum = Number(totalHarga) || 0;
   const sharingNum = Math.round(totalNum * 0.3); // 30% komisi radiolog standar
-
-  const titles: Record<'THORAX' | 'CRANIUM' | 'DENTAL' | 'EXTREMITAS', string> = {
-    THORAX: 'Thorax PA (Posteroanterior)',
-    CRANIUM: 'Cranium AP / Lateral (Head X-Ray)',
-    DENTAL: 'Dental Panoramic (Jaw & Teeth)',
-    EXTREMITAS: 'Extremity Bone / Fracture Study',
-  };
 
   return (
     <div
       style={{
-        background: '#ffffff',
+        background: '#f8fafc',
         border: '1px solid #cbd5e1',
-        borderRadius: '12px',
-        padding: '1rem',
+        borderRadius: '8px',
+        padding: '0.75rem 1rem',
         marginBottom: '1rem',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '0.5rem',
+        fontSize: '0.9rem',
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '0.75rem',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-        }}
-      >
-        <div>
-          <h4 style={{ margin: 0, fontSize: '1rem', color: '#0f172a' }}>
-            🖼️ DICOM Viewer &amp; Gambar Roentgen — <strong>{titles[xrayMode]}</strong>
-          </h4>
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-            Klinik Prima Husada Digital Radiography (DR/DICOM 3.0)
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: '0.4rem' }}>
-          {(['THORAX', 'CRANIUM', 'DENTAL', 'EXTREMITAS'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => {
-                setXrayMode(m);
-                setZoom(1);
-              }}
-              style={{
-                padding: '0.35rem 0.65rem',
-                borderRadius: '6px',
-                border: xrayMode === m ? '1px solid #0284c7' : '1px solid #cbd5e1',
-                background: xrayMode === m ? '#f0f9ff' : '#f8fafc',
-                color: xrayMode === m ? '#0284c7' : '#475569',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
+      <div>
+        <span style={{ color: '#64748b' }}>Tarif Pemeriksaan Radiologi: </span>
+        <strong style={{ color: '#0f172a' }}>{formatRupiah(totalNum)}</strong>
       </div>
-
-      {/* Dark DICOM Viewer Canvas */}
-      <div
-        style={{
-          background: invert ? '#e2e8f0' : '#090d16',
-          borderRadius: '8px',
-          padding: '1rem',
-          position: 'relative',
-          height: '240px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          border: '1px solid #334155',
-        }}
-      >
-        {/* DICOM Overlay Metadata */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '8px',
-            left: '12px',
-            color: invert ? '#0f172a' : '#22d3ee',
-            fontFamily: 'monospace',
-            fontSize: '0.75rem',
-            lineHeight: 1.3,
-            pointerEvents: 'none',
-          }}
-        >
-          <div>PID: {regCode}</div>
-          <div>NAME: {patientName}</div>
-          <div>STUDY: {xrayMode} PA/AP</div>
-        </div>
-        <div
-          style={{
-            position: 'absolute',
-            top: '8px',
-            right: '12px',
-            color: invert ? '#0f172a' : '#22d3ee',
-            fontFamily: 'monospace',
-            fontSize: '0.75rem',
-            textAlign: 'right',
-            pointerEvents: 'none',
-          }}
-        >
-          <div>KLINIK PRIMA HUSADA</div>
-          <div>kVp: 72 | mAs: 12.5</div>
-          <div>DICOM ARCHIVE #1</div>
-        </div>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '8px',
-            left: '12px',
-            color: invert ? '#0f172a' : '#f87171',
-            fontFamily: 'monospace',
-            fontWeight: 700,
-            fontSize: '1rem',
-            pointerEvents: 'none',
-          }}
-        >
-          R
-        </div>
-
-        {/* Simulated Anatomical Image */}
-        <div
-          style={{
-            transform: `scale(${zoom})`,
-            transition: 'transform 0.2s ease',
-            color: invert ? '#0f172a' : '#e2e8f0',
-            textAlign: 'center',
-          }}
-        >
-          {xrayMode === 'THORAX' && (
-            <svg width="180" height="180" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <ellipse cx="50" cy="50" rx="36" ry="44" stroke="currentColor" strokeWidth="2.5" strokeDasharray="3 1" />
-              <path d="M50 15V85 M35 30Q50 40 65 30 M30 50Q50 60 70 50 M35 70Q50 78 65 70" stroke="currentColor" strokeWidth="1.5" />
-              <circle cx="45" cy="55" r="10" fill="currentColor" fillOpacity="0.25" />
-            </svg>
-          )}
-          {xrayMode === 'CRANIUM' && (
-            <svg width="170" height="170" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="50" cy="45" r="35" stroke="currentColor" strokeWidth="3" />
-              <path d="M35 50 Q50 65 65 50" stroke="currentColor" strokeWidth="2" />
-              <circle cx="38" cy="42" r="6" stroke="currentColor" strokeWidth="1.5" />
-              <circle cx="62" cy="42" r="6" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-          )}
-          {xrayMode === 'DENTAL' && (
-            <svg width="200" height="140" viewBox="0 0 100 70" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M10 40 Q50 75 90 40" stroke="currentColor" strokeWidth="3" />
-              <path d="M15 35 Q50 68 85 35" stroke="currentColor" strokeWidth="2" strokeDasharray="4 2" />
-              <circle cx="50" cy="50" r="3" fill="currentColor" />
-            </svg>
-          )}
-          {xrayMode === 'EXTREMITAS' && (
-            <svg width="140" height="180" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <line x1="38" y1="10" x2="38" y2="90" stroke="currentColor" strokeWidth="8" strokeLinecap="round" />
-              <line x1="48" y1="20" x2="48" y2="85" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-              <path d="M30 48 L56 53" stroke="#f87171" strokeWidth="2" />
-            </svg>
-          )}
-          <div style={{ fontSize: '0.75rem', marginTop: '0.25rem', opacity: 0.8 }}>
-            [{titles[xrayMode]} Digital Image]
-          </div>
-        </div>
-
-        {/* Viewer Tools */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '8px',
-            right: '12px',
-            display: 'flex',
-            gap: '0.3rem',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.max(0.7, z - 0.2))}
-            style={{ padding: '0.2rem 0.5rem', background: '#334155', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
-          >
-            - Zoom
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.min(2.0, z + 0.2))}
-            style={{ padding: '0.2rem 0.5rem', background: '#334155', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
-          >
-            + Zoom
-          </button>
-          <button
-            type="button"
-            onClick={() => setInvert((v) => !v)}
-            style={{ padding: '0.2rem 0.5rem', background: '#334155', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
-          >
-            {invert ? 'Dark Mode' : 'Invert'}
-          </button>
-        </div>
-      </div>
-
-      {/* Keuangan & Sharing Dokter Radiologi */}
-      <div
-        style={{
-          marginTop: '0.75rem',
-          padding: '0.65rem 0.85rem',
-          background: '#f8fafc',
-          borderRadius: '8px',
-          border: '1px solid #e2e8f0',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-          fontSize: '0.85rem',
-        }}
-      >
-        <div>
-          <span style={{ color: '#64748b' }}>Tarif Pemeriksaan Radiologi: </span>
-          <strong style={{ color: '#0f172a' }}>{formatRupiah(totalNum)}</strong>
-        </div>
-        <div>
-          <span style={{ color: '#64748b' }}>Estimasi Komisi Radiolog (30%): </span>
-          <strong style={{ color: '#0284c7' }}>{formatRupiah(sharingNum)}</strong>
-        </div>
+      <div>
+        <span style={{ color: '#64748b' }}>Estimasi Komisi Radiolog (30%): </span>
+        <strong style={{ color: '#0284c7' }}>{formatRupiah(sharingNum)}</strong>
       </div>
     </div>
   );
@@ -528,10 +318,8 @@ export function RadiologWorkPage() {
               )}
             </div>
 
-            {/* DICOM Viewer & Gambar Roentgen + Keuangan */}
-            <XRayDicomViewer
-              patientName={selected.nama}
-              regCode={selected.regCode}
+            {/* Ringkasan Tarif Pemeriksaan & Komisi Radiolog */}
+            <RadiologTarifSummary
               totalHarga={selected.totalHarga}
             />
 
