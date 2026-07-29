@@ -1241,7 +1241,7 @@ export function PasienPage() {
         open={editJenisModalOpen}
         title="Ubah Jenis Pemeriksaan & Harga"
         onClose={() => setEditJenisModalOpen(false)}
-        size="sm"
+        size="md"
       >
         <form onSubmit={(e) => void onSubmitEditJenis(e)} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.25rem 0' }}>
           {jenisError ? <div className="alert alert--error">{jenisError}</div> : null}

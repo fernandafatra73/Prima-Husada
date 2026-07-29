@@ -135,8 +135,6 @@ export function LaboratoriumPage() {
   const [saving, setSaving] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [logoSrc, setLogoSrc] = useState('');
-  const [duplikatTarget, setDuplikatTarget] = useState<LabPasienItem | null>(null);
-  const [duplikatLoading, setDuplikatLoading] = useState(false);
 
   // Registrasi Lab state
   const [regModalOpen, setRegModalOpen] = useState(false);
@@ -290,30 +288,6 @@ export function LaboratoriumPage() {
       console.error('Print error:', err);
     } finally {
       setPrintingId(null);
-    }
-  }
-
-  async function handleDuplikat() {
-    if (!duplikatTarget) return;
-    setDuplikatLoading(true);
-    setError(null);
-    try {
-      await apiPost('/api/pasien', {
-        nama: duplikatTarget.nama,
-        tanggalLahir: duplikatTarget.tanggalLahir,
-        noTelepon: duplikatTarget.noTelepon ?? undefined,
-        alamat: duplikatTarget.alamat ?? undefined,
-        pengirimId: duplikatTarget.pengirim.id,
-        klinis: duplikatTarget.klinis ?? undefined,
-        jenisPemeriksaanIds: duplikatTarget.pemeriksaan.map((p) => p.jenisPemeriksaanId),
-        radiologId: duplikatTarget.radiolog?.id ?? undefined,
-      });
-      setDuplikatTarget(null);
-      await reload();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Gagal menduplikat data laboratorium');
-    } finally {
-      setDuplikatLoading(false);
     }
   }
 
@@ -706,15 +680,6 @@ export function LaboratoriumPage() {
                     >
                       🖨️ Preview & Cetak
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm"
-                      onClick={() => setDuplikatTarget(item)}
-                      title="Duplikat registrasi laboratorium ini"
-                      style={{ border: '1px solid var(--color-border)' }}
-                    >
-                      📋 Duplikat
-                    </button>
                   </div>
                 </td>
               </tr>
@@ -1011,15 +976,6 @@ export function LaboratoriumPage() {
           </div>
         </Modal>
       )}
-      <ConfirmModal
-        open={duplikatTarget !== null}
-        title="Duplikat Laboratorium"
-        message={`Duplikat registrasi lab untuk "${duplikatTarget?.nama ?? ''}" (${duplikatTarget?.regCode ?? ''})? Data baru akan dibuat dengan reg code baru, status MENUNGGU HASIL, dan hasil dikosongkan.`}
-        confirmLabel="Ya, Duplikat"
-        loading={duplikatLoading}
-        onClose={() => setDuplikatTarget(null)}
-        onConfirm={() => void handleDuplikat()}
-      />
 
       {/* ─── Master Paket Pemeriksaan Modal ─────────────────────────────────── */}
       <Modal
