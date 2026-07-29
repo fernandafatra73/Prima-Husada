@@ -65,7 +65,7 @@ export function CetakALModal({
     const amplopHtml = `
       <div class="amplop-sheet">
         <div class="amplop-header">
-          <div class="amplop-title">LABORATORIUM & KLINIK PRIMA HUSADA</div>
+          <div class="amplop-title">KLINIK PRIMA HUSADA</div>
           <div class="amplop-subtitle">HASIL PEMERIKSAAN RADIOLOGI</div>
         </div>
         <div class="amplop-body">
@@ -322,7 +322,7 @@ export function CetakALModal({
                 }}
               >
                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
-                  LABORATORIUM &amp; KLINIK PRIMA HUSADA
+                  KLINIK PRIMA HUSADA
                 </div>
                 <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0369a1', marginTop: '0.25rem' }}>
                   HASIL PEMERIKSAAN RADIOLOGI

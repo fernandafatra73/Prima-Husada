@@ -42,6 +42,7 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
     items: [
       { id: 'lab', label: 'Registrasi Lab', shortLabel: 'Registrasi Lab' },
       { id: 'harga-pemeriksaan-lab', label: 'Harga Pemeriksaan Lab', shortLabel: 'Harga Pemeriksaan Lab' },
+      { id: 'cetak-al', label: 'Cetak A+L (Amplop & Label)', shortLabel: 'Cetak A+L' },
       { id: 'paket-lab-master', label: 'Jenis Pemeriksaan Lab', shortLabel: 'Jenis Pemeriksaan Lab' },
       { id: 'petugas-lab-master', label: 'Master Petugas Laboratorium', shortLabel: 'Petugas Lab' },
       { id: 'klasifikasi-paket', label: 'Klasifikasi Paket', shortLabel: 'Klasifikasi Paket' },
