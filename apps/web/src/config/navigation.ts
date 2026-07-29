@@ -36,16 +36,6 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
     ],
   },
   {
-    id: 'keuangan',
-    label: 'Keuangan',
-    iconName: 'currency',
-    items: [
-      { id: 'keuangan-pembukuan', label: 'Sistem Keuangan & Pembukuan', shortLabel: 'Buku Kas & Keuangan' },
-      { id: 'sharing', label: 'Manajemen Sharing Dokter', shortLabel: 'Sharing Dokter' },
-      { id: 'laporan-tahunan', label: 'Laporan Tahunan', shortLabel: 'Laporan Tahunan' },
-    ],
-  },
-  {
     id: 'laboratorium',
     label: 'Laboratorium',
     iconName: 'flask',
@@ -55,6 +45,16 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
       { id: 'paket-lab-master', label: 'Jenis Pemeriksaan Lab', shortLabel: 'Jenis Pemeriksaan Lab' },
       { id: 'petugas-lab-master', label: 'Master Petugas Laboratorium', shortLabel: 'Petugas Lab' },
       { id: 'klasifikasi-paket', label: 'Klasifikasi Paket', shortLabel: 'Klasifikasi Paket' },
+    ],
+  },
+  {
+    id: 'keuangan',
+    label: 'Keuangan',
+    iconName: 'currency',
+    items: [
+      { id: 'keuangan-pembukuan', label: 'Sistem Keuangan & Pembukuan', shortLabel: 'Buku Kas & Keuangan' },
+      { id: 'sharing', label: 'Manajemen Sharing Dokter', shortLabel: 'Sharing Dokter' },
+      { id: 'laporan-tahunan', label: 'Laporan Tahunan', shortLabel: 'Laporan Tahunan' },
     ],
   },
   {
