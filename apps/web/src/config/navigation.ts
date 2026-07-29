@@ -46,16 +46,6 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
     ],
   },
   {
-    id: 'master-sistem',
-    label: 'Dokter & System',
-    iconName: 'shield',
-    items: [
-      { id: 'dokter', label: 'Manajemen Dokter Pengirim', shortLabel: 'Dokter Pengirim' },
-      { id: 'role', label: 'Manajemen Role & Staff', shortLabel: 'Role & Staff' },
-      { id: 'admin', label: 'Manajemen Admin', shortLabel: 'Admin' },
-    ],
-  },
-  {
     id: 'laboratorium',
     label: 'Laboratorium',
     iconName: 'flask',
@@ -65,6 +55,16 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
       { id: 'paket-lab-master', label: 'Jenis Pemeriksaan Lab', shortLabel: 'Jenis Pemeriksaan Lab' },
       { id: 'petugas-lab-master', label: 'Master Petugas Laboratorium', shortLabel: 'Petugas Lab' },
       { id: 'klasifikasi-paket', label: 'Klasifikasi Paket', shortLabel: 'Klasifikasi Paket' },
+    ],
+  },
+  {
+    id: 'master-sistem',
+    label: 'Dokter & System',
+    iconName: 'shield',
+    items: [
+      { id: 'dokter', label: 'Manajemen Dokter Pengirim', shortLabel: 'Dokter Pengirim' },
+      { id: 'role', label: 'Manajemen Role & Staff', shortLabel: 'Role & Staff' },
+      { id: 'admin', label: 'Manajemen Admin', shortLabel: 'Admin' },
     ],
   },
   {
