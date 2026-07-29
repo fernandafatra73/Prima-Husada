@@ -215,13 +215,19 @@ export function PasienPage() {
     return computeUmurYears(tanggalLahir) ?? 0;
   }, [tanggalLahir]);
 
+  const selectedDokter = useMemo(() => dokter.find((d) => d.id === pengirimId), [dokter, pengirimId]);
+
   const autoSharingAmount = useMemo(() => {
-    const dok = dokter.find((d) => d.id === pengirimId);
     const selectedNames = selectedJenis
       .map((id) => jenis.find((j) => j.id === id)?.nama || '')
       .filter(Boolean);
-    return computeAutoSharingAmount(dok?.nama, selectedNames, umurYears, dok?.defaultSharingAmount || '0');
-  }, [dokter, pengirimId, selectedJenis, jenis, umurYears]);
+    return computeAutoSharingAmount(
+      selectedDokter?.nama,
+      selectedNames,
+      umurYears,
+      selectedDokter?.defaultSharingAmount || '0',
+    );
+  }, [selectedDokter, selectedJenis, jenis, umurYears]);
 
   useEffect(() => {
     if (sharingMode === 'auto') {
@@ -710,8 +716,10 @@ export function PasienPage() {
                     <td style={{ textAlign: 'right', padding: '10px', fontWeight: isChecked ? 600 : 400, color: '#0f172a' }}>
                       {formatRupiah(itemHarga)}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '10px', fontWeight: isChecked ? 600 : 400, color: isChecked ? '#0284c7' : '#94a3b8' }}>
-                      {isChecked ? formatRupiah(itemSharing) : '-'}
+                    <td style={{ textAlign: 'right', padding: '10px', fontWeight: isChecked ? 600 : 400, color: isChecked ? '#0284c7' : '#64748b' }}>
+                      {isChecked
+                        ? formatRupiah(itemSharing)
+                        : `Otomatis (${formatRupiah(Number(computeAutoSharingAmount(selectedDokter?.nama, [j.nama], umurYears, selectedDokter?.defaultSharingAmount || '0')) || 0)})`}
                     </td>
                     <td style={{ textAlign: 'center', padding: '10px' }}>
                       <button
@@ -1239,7 +1247,7 @@ export function PasienPage() {
 
       <Modal
         open={editJenisModalOpen}
-        title="Ubah Jenis Pemeriksaan & Harga"
+        title="Ubah Jenis Pemeriksaan, Harga & Sharing"
         onClose={() => setEditJenisModalOpen(false)}
         size="md"
       >
@@ -1266,6 +1274,32 @@ export function PasienPage() {
               onChange={(e) => setEditingJenisHarga(e.target.value)}
               required
             />
+          </div>
+          <div className="form-field">
+            <label>Ketentuan Sharing Dokter (Otomatis)</label>
+            <div
+              style={{
+                padding: '0.6rem 0.8rem',
+                backgroundColor: '#f0f9ff',
+                border: '1px solid #bae6fd',
+                borderRadius: '6px',
+                color: '#0369a1',
+                fontWeight: 600,
+              }}
+            >
+              Otomatis (
+              {formatRupiah(
+                Number(
+                  computeAutoSharingAmount(
+                    selectedDokter?.nama,
+                    [editingJenisNama],
+                    umurYears,
+                    selectedDokter?.defaultSharingAmount || '0',
+                  ),
+                ) || 0,
+              )}
+              ) — Sesuai Usia &amp; Pemeriksaan
+            </div>
           </div>
           <ModalFormFooter
             onCancel={() => setEditJenisModalOpen(false)}

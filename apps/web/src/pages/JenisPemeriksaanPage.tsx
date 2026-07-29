@@ -18,6 +18,20 @@ interface Jenis {
   readonly detailLayanan: string | null;
 }
 
+function getSharingInfo(nama: string): { readonly amountText: string; readonly note: string } {
+  const lower = (nama || '').toLowerCase();
+  if (lower.includes('lumbosacral')) {
+    return { amountText: 'Rp 88.000', note: 'Lumbosacral' };
+  }
+  if (lower.includes('shoulder')) {
+    return { amountText: 'Rp 58.000', note: 'Shoulder Joint' };
+  }
+  if (lower.includes('thorak') || lower.includes('thorax')) {
+    return { amountText: 'Rp 18.000 – Rp 35.000', note: 'Sesuai Usia & Dokter' };
+  }
+  return { amountText: 'Rp 50.000', note: 'Standar Dokter' };
+}
+
 export function JenisPemeriksaanPage() {
   const { search, setSearch } = useListSearch();
   const queryParams = useListQueryParams({}, search);
@@ -26,7 +40,6 @@ export function JenisPemeriksaanPage() {
   const reload = useMutationReload(reloadList);
   const [nama, setNama] = useState('');
   const [harga, setHarga] = useState('');
-  const [detail, setDetail] = useState('');
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -42,7 +55,6 @@ export function JenisPemeriksaanPage() {
   function openAdd() {
     setNama('');
     setHarga('');
-    setDetail('');
     setEditingId(null);
     setModalMode('add');
   }
@@ -51,7 +63,6 @@ export function JenisPemeriksaanPage() {
     setEditingId(j.id);
     setNama(j.nama);
     setHarga(j.harga ?? '');
-    setDetail(j.detailLayanan ?? '');
     setModalMode('edit');
   }
 
@@ -66,7 +77,6 @@ export function JenisPemeriksaanPage() {
     const body = {
       nama,
       harga: Number(harga),
-      detailLayanan: detail.trim() || undefined,
     };
     try {
       if (modalMode === 'add') {
@@ -101,8 +111,8 @@ export function JenisPemeriksaanPage() {
   return (
     <>
       <ListPageShell
-        title="Manajemen Jenis Pemeriksaan"
-        subtitle="Jenis layanan radiologi beserta harga dan detail layanan"
+        title="Manajemen Jenis Pemeriksaan, Harga & Sharing"
+        subtitle="Daftar jenis pemeriksaan radiologi beserta tarif harga dan ketentuan sharing dokter"
         action={
           <button type="button" className="btn btn--primary" onClick={openAdd}>
             + Tambah Jenis
@@ -140,31 +150,49 @@ export function JenisPemeriksaanPage() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Nama pemeriksaan</th>
-              <th>Harga</th>
-              <th>Detail layanan</th>
-              <th>Aksi</th>
+              <th style={{ width: '60px', textAlign: 'center' }}>No</th>
+              <th>Jenis Pemeriksaan</th>
+              <th style={{ textAlign: 'right' }}>Harga</th>
+              <th style={{ textAlign: 'right' }}>Sharing (Otomatis)</th>
+              <th style={{ width: '100px', textAlign: 'center' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={4}>Belum ada jenis pemeriksaan.</td>
+                <td colSpan={5} style={{ textAlign: 'center', padding: '1.5rem' }}>
+                  Belum ada jenis pemeriksaan.
+                </td>
               </tr>
             ) : (
-              items.map((j) => (
-                <tr key={j.id}>
-                  <td>{j.nama}</td>
-                  <td>{j.harga ? formatRupiah(j.harga) : 'Belum diatur'}</td>
-                  <td className="cell-wrap">{j.detailLayanan ?? '—'}</td>
-                  <td>
-                    <TableRowActions
-                      onEdit={() => openEdit(j)}
-                      onDelete={() => setDeleteTarget({ id: j.id, label: j.nama })}
-                    />
-                  </td>
-                </tr>
-              ))
+              items.map((j, index) => {
+                const sharingInfo = getSharingInfo(j.nama);
+                return (
+                  <tr key={j.id}>
+                    <td style={{ textAlign: 'center' }}>
+                      {(pagination.page - 1) * pagination.limit + index + 1}
+                    </td>
+                    <td style={{ fontWeight: 500, color: '#0f172a' }}>{j.nama}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: '#0f172a' }}>
+                      {j.harga ? formatRupiah(j.harga) : 'Belum diatur'}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 600, color: '#0284c7' }}>
+                        {sharingInfo.amountText}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        {sharingInfo.note}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <TableRowActions
+                        onEdit={() => openEdit(j)}
+                        onDelete={() => setDeleteTarget({ id: j.id, label: j.nama })}
+                      />
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -172,7 +200,7 @@ export function JenisPemeriksaanPage() {
 
       <Modal
         open={modalMode !== null}
-        title={modalMode === 'add' ? 'Tambah Jenis Pemeriksaan' : 'Ubah Jenis Pemeriksaan'}
+        title={modalMode === 'add' ? 'Tambah Jenis Pemeriksaan' : 'Ubah Jenis Pemeriksaan, Harga & Sharing'}
         onClose={() => setModalMode(null)}
       >
         <form onSubmit={(e) => void onSubmit(e)} className="form-grid">
@@ -191,15 +219,23 @@ export function JenisPemeriksaanPage() {
               onChange={(e) => setHarga(e.target.value)}
             />
           </div>
-          <div className="form-field form-grid--full">
-            <label htmlFor="jd">Detail / isi layanan</label>
-            <textarea
-              id="jd"
-              rows={3}
-              value={detail}
-              onChange={(e) => setDetail(e.target.value)}
-              placeholder="Contoh: Foto thorax PA + interpretasi"
-            />
+          <div className="form-field">
+            <label>Ketentuan Sharing Dokter</label>
+            <div
+              style={{
+                padding: '0.6rem 0.8rem',
+                backgroundColor: '#f0f9ff',
+                border: '1px solid #bae6fd',
+                borderRadius: '6px',
+                color: '#0369a1',
+                fontWeight: 600,
+              }}
+            >
+              {nama ? getSharingInfo(nama).amountText : 'Rp 50.000'}{' '}
+              <span style={{ fontWeight: 400, color: '#0284c7', fontSize: '0.85em' }}>
+                ({nama ? getSharingInfo(nama).note : 'Standar Dokter'})
+              </span>
+            </div>
           </div>
           <ModalFormFooter
             onCancel={() => setModalMode(null)}

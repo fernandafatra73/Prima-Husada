@@ -29,7 +29,7 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
       { id: 'pasien', label: 'Data & Registrasi Pasien', shortLabel: 'Registrasi Pasien' },
       { id: 'radiolog', label: 'Pekerjaan Radiolog', shortLabel: 'Pekerjaan Radiolog' },
       { id: 'radiolog-duplikat', label: 'Duplikat Radiologi', shortLabel: 'Duplikat Radiologi' },
-      { id: 'jenis-pemeriksaan', label: 'Jenis Pemeriksaan', shortLabel: 'Jenis Pemeriksaan' },
+      { id: 'jenis-pemeriksaan', label: 'Jenis Pemeriksaan, Harga & Sharing', shortLabel: 'Jenis Pemeriksaan' },
       { id: 'kesan', label: 'Master Kesan (Expertise)', shortLabel: 'Master Kesan' },
       { id: 'radiolog-master', label: 'Master Radiolog', shortLabel: 'Master Radiolog' },
     ],
