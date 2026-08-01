@@ -279,15 +279,15 @@ export async function registerKlinikRoutes(app: FastifyInstance): Promise<void> 
   app.get('/api/keuangan/summary', async () => {
     // 1. Total dari Pasien (Laboratorium & Radiologi)
     const pasienList = await prisma.pasien.findMany({
-      select: { totalBayar: true, dokterSharing: true, paymentStatus: true },
+      select: { totalHarga: true, totalSharing: true, paymentStatus: true },
     });
 
     let totalPendapatanPasien = 0;
     let totalSharingDokter = 0;
 
     for (const p of pasienList) {
-      const nominalBayar = p.totalBayar ? Number(p.totalBayar) : 0;
-      const sharing = p.dokterSharing ? Number(p.dokterSharing) : 0;
+      const nominalBayar = p.totalHarga ? Number(p.totalHarga) : 0;
+      const sharing = p.totalSharing ? Number(p.totalSharing) : 0;
       totalPendapatanPasien += nominalBayar;
       totalSharingDokter += sharing;
     }

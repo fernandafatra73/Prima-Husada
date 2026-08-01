@@ -36,6 +36,8 @@ export function CetakALModal({
 }: CetakALModalProps) {
   const [mode, setMode] = useState<'amplop' | 'label' | 'both'>(initialMode);
   const [copied, setCopied] = useState(false);
+  const [labelPosition, setLabelPosition] = useState(1);
+  const LABEL_POSITIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 
   if (!pasien) {
     return null;
@@ -98,15 +100,29 @@ export function CetakALModal({
       </div>
     `;
 
+    const labelCellHtml = `
+        <div class="label-box">
+          <div class="label-header">
+            <div class="label-title">KLINIK PRIMA HUSADA</div>
+            <div class="label-subtitle">Jl Siliwangi Ruko Palapa No 2 Parung Kuda</div>
+          </div>
+          <table class="label-table">
+            <tr><th>No. Foto / RM</th><td>${pasien.regCode}</td></tr>
+            <tr><th>Nama Pasien</th><td>${pasien.nama} (${umur} thn)</td></tr>
+            <tr><th>Tanggal Foto</th><td>${tanggal}</td></tr>
+            <tr><th>Jenis Pemeriksaan</th><td>${jenisNames}</td></tr>
+            <tr><th>Dokter Pengirim</th><td>${pasien.pengirim.nama}</td></tr>
+          </table>
+        </div>
+    `;
+
+    const labelCellsHtml = LABEL_POSITIONS.map(
+      (pos) => `<div class="label-cell">${pos === labelPosition ? labelCellHtml : ''}</div>`
+    ).join('');
+
     const labelHtml = `
       <div class="label-sheet">
-        <div class="label-box">
-          <div class="label-header">PRIMA HUSADA — RADIOLOGI</div>
-          <div class="label-reg">${pasien.regCode}</div>
-          <div class="label-name">${pasien.nama} <span>(${umur} thn)</span></div>
-          <div class="label-exam">${jenisNames}</div>
-          <div class="label-meta">Tgl: ${tanggal} | Dr: ${pasien.pengirim.nama}</div>
-        </div>
+        ${labelCellsHtml}
       </div>
     `;
 
@@ -117,122 +133,178 @@ export function CetakALModal({
           ? labelHtml
           : `${amplopHtml}<div style="page-break-after: always;"></div>${labelHtml}`;
 
+    const pageCss =
+      mode === 'label'
+        ? '@page { size: 20.5cm 15cm landscape; margin: 0; }'
+        : mode === 'amplop'
+          ? '@page { margin: 0; }'
+          : '@page { margin: 15mm; }';
+    const bodyPadding = mode === 'label' ? '0' : '20px';
+
     win.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Cetak A+L - ${pasien.regCode} - ${pasien.nama}</title>
+          <title>Klinik Prima Husada</title>
           <style>
-            @page {
-              margin: 15mm;
-            }
+            ${pageCss}
             body {
               font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
               color: #0f172a;
               background: #fff;
               margin: 0;
-              padding: 20px;
+              padding: ${bodyPadding};
             }
             .amplop-sheet {
+              width: 12cm;
+              height: 8cm;
+              box-sizing: border-box;
+              overflow: hidden;
               border: 2px solid #000;
-              padding: 25px;
-              border-radius: 8px;
-              max-width: 700px;
-              margin: 0 auto 30px auto;
+              padding: 10px;
+              border-radius: 6px;
+              margin: 0 auto;
+              display: flex;
+              flex-direction: column;
             }
             .amplop-header {
               text-align: center;
-              border-bottom: 2px solid #000;
-              padding-bottom: 15px;
-              margin-bottom: 20px;
+              border-bottom: 1.5px solid #000;
+              padding-bottom: 6px;
+              margin-bottom: 8px;
             }
             .amplop-title {
-              font-size: 20px;
+              font-size: 14px;
               font-weight: 700;
-              letter-spacing: 0.5px;
+              letter-spacing: 0.3px;
             }
             .amplop-subtitle {
-              font-size: 16px;
+              font-size: 11px;
               font-weight: 600;
-              margin-top: 5px;
+              margin-top: 3px;
+            }
+            .amplop-body {
+              flex: 1;
+              min-height: 0;
             }
             .amplop-table {
               width: 100%;
               border-collapse: collapse;
+              table-layout: fixed;
             }
             .amplop-table th {
               text-align: left;
-              width: 180px;
-              padding: 8px 10px;
-              font-size: 15px;
+              width: 100px;
+              padding: 3px 6px 3px 0;
+              font-size: 10.5px;
               color: #334155;
               border-bottom: 1px solid #e2e8f0;
+              vertical-align: top;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
             .amplop-table td {
-              padding: 8px 10px;
-              font-size: 16px;
+              padding: 3px 0;
+              font-size: 11.5px;
               border-bottom: 1px solid #e2e8f0;
+              vertical-align: top;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
             .amplop-footer {
-              margin-top: 25px;
-              font-size: 13px;
+              margin-top: 6px;
+              font-size: 8.5px;
               font-style: italic;
               color: #475569;
               text-align: center;
             }
 
             .label-sheet {
-              max-width: 420px;
+              width: 100%;
+              max-width: 20.5cm;
+              height: 15cm;
               margin: 0 auto;
+              padding: 0;
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              grid-template-rows: repeat(4, 1fr);
+              column-gap: 0.25cm;
+              row-gap: 0.3cm;
+              box-sizing: border-box;
+              transform: translate(-0.2cm, 0.1cm);
+            }
+            .label-cell {
+              display: flex;
+              align-items: center;
+              justify-content: center;
             }
             .label-box {
+              width: 6cm;
+              height: 2.9cm;
+              box-sizing: border-box;
+              overflow: hidden;
               border: 2px solid #000;
-              border-radius: 6px;
-              padding: 12px 16px;
+              border-radius: 1.5mm;
+              padding: 1.2mm 2mm;
               background: #fff;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
             }
             .label-header {
-              font-size: 12px;
+              border-bottom: 0.75px solid #000;
+              margin: 0 -2mm 0.6mm -2mm;
+              padding: 0 2mm 0.5mm 2mm;
+            }
+            .label-title {
+              font-size: 8px;
               font-weight: 700;
+              text-align: center;
               text-transform: uppercase;
-              letter-spacing: 0.5px;
-              border-bottom: 1px solid #000;
-              padding-bottom: 4px;
-              margin-bottom: 8px;
+              letter-spacing: 0.3px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
-            .label-reg {
-              font-size: 24px;
-              font-weight: 800;
-              line-height: 1.1;
-              color: #000;
-            }
-            .label-name {
-              font-size: 16px;
-              font-weight: 700;
-              margin-top: 4px;
-            }
-            .label-name span {
-              font-weight: 500;
-              font-size: 14px;
-            }
-            .label-exam {
-              font-size: 14px;
+            .label-subtitle {
+              font-size: 6px;
               font-weight: 600;
-              margin-top: 6px;
-              color: #1e293b;
+              text-align: center;
+              color: #0369a1;
+              margin-top: 0.3mm;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
-            .label-meta {
-              font-size: 12px;
-              color: #475569;
-              margin-top: 8px;
-              border-top: 1px dashed #cbd5e1;
-              padding-top: 6px;
+            .label-table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              font-size: 6.5px;
+            }
+            .label-table th {
+              width: 38%;
+              text-align: left;
+              font-weight: 700;
+              color: #334155;
+              padding: 0.3mm 1mm 0.3mm 0;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .label-table td {
+              width: 62%;
+              font-weight: 600;
+              color: #000;
+              padding: 0.3mm 0;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
             @media print {
-              body {
-                padding: 0;
-              }
-              .amplop-sheet, .label-box {
+              .label-box {
                 margin: 0;
                 box-shadow: none;
               }
@@ -291,6 +363,40 @@ export function CetakALModal({
             🖨️ Keduanya (A+L)
           </button>
         </div>
+
+        {(mode === 'label' || mode === 'both') && (
+          <div
+            style={{
+              marginBottom: '1.25rem',
+              paddingBottom: '1rem',
+              borderBottom: '1px solid #e2e8f0',
+            }}
+          >
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+              Pilih Posisi Label di Lembar Stiker (20,5×15 cm — 3 kolom × 4 baris, 12 posisi)
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '0.4rem',
+                maxWidth: '260px',
+              }}
+            >
+              {LABEL_POSITIONS.map((pos) => (
+                <button
+                  key={pos}
+                  type="button"
+                  onClick={() => setLabelPosition(pos)}
+                  className={`btn btn--sm ${labelPosition === pos ? 'btn--primary' : 'btn--secondary'}`}
+                  style={{ padding: '0.4rem 0', fontWeight: 700 }}
+                >
+                  {pos}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div
           style={{
@@ -385,49 +491,79 @@ export function CetakALModal({
           )}
 
           {(mode === 'label' || mode === 'both') && (
-            <div
-              style={{
-                background: '#ffffff',
-                border: '2px solid #1e293b',
-                borderRadius: '8px',
-                padding: '1.25rem',
-                maxWidth: '420px',
-                margin: '0 auto',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
-              }}
-            >
+            <div style={{ maxWidth: '420px', margin: '0 auto' }}>
               <div
                 style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gridTemplateRows: 'repeat(4, 1fr)',
+                  gap: '4px',
+                  aspectRatio: '20.5 / 15',
+                  background: '#ffffff',
+                  border: '2px solid #1e293b',
+                  borderRadius: '8px',
+                  padding: '10px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
+                }}
+              >
+                {LABEL_POSITIONS.map((pos) => (
+                  <div
+                    key={pos}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: pos === labelPosition ? '1.5px solid #0369a1' : '1px dashed #cbd5e1',
+                      borderRadius: '3px',
+                      background: pos === labelPosition ? '#f0f9ff' : '#f8fafc',
+                      overflow: 'hidden',
+                      padding: '2px',
+                    }}
+                  >
+                    {pos === labelPosition ? (
+                      <div style={{ textAlign: 'center', lineHeight: 1.2, overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            fontSize: '0.5rem',
+                            fontWeight: 700,
+                            color: '#0369a1',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          Prima Husada
+                        </div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#0f172a' }}>
+                          {pasien.regCode}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.5rem',
+                            fontWeight: 600,
+                            color: '#1e293b',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '100%',
+                          }}
+                        >
+                          {pasien.nama}
+                        </div>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>{pos}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div
+                style={{
+                  textAlign: 'center',
                   fontSize: '0.75rem',
-                  fontWeight: 700,
-                  color: '#0369a1',
-                  textTransform: 'uppercase',
-                  borderBottom: '1px solid #1e293b',
-                  paddingBottom: '0.25rem',
-                  marginBottom: '0.5rem',
-                }}
-              >
-                PRIMA HUSADA — RADIOLOGI
-              </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
-                {pasien.regCode}
-              </div>
-              <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '0.25rem', color: '#1e293b' }}>
-                {pasien.nama} <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>({umur} thn)</span>
-              </div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600, marginTop: '0.5rem', color: '#334155' }}>
-                {jenisNames}
-              </div>
-              <div
-                style={{
-                  fontSize: '0.8rem',
                   color: '#64748b',
-                  marginTop: '0.6rem',
-                  paddingTop: '0.5rem',
-                  borderTop: '1px dashed #cbd5e1',
+                  marginTop: '0.5rem',
                 }}
               >
-                Tgl: {tanggal} | Dr: {pasien.pengirim.nama}
+                Posisi {labelPosition} akan berisi label pasien ini — posisi lain dikosongkan saat dicetak.
               </div>
             </div>
           )}

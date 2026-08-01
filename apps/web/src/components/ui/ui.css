@@ -5,6 +5,15 @@
   box-shadow: var(--shadow-card);
 }
 
+@keyframes musik-ph-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(3, 105, 161, 0.35); }
+  50% { box-shadow: 0 0 0 12px rgba(3, 105, 161, 0); }
+}
+
+.musik-ph-toggle--on {
+  animation: musik-ph-pulse 1.6s ease-out infinite;
+}
+
 .panel__toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -102,6 +111,14 @@
 .badge--muted {
   background: var(--color-bg-page);
   color: var(--color-text-muted);
+}
+
+/** Khusus status "Menunggu Hasil" & "Belum Lunas": tebal & merah agar menonjol. */
+.badge--pending,
+.badge--unpaid {
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: 700;
 }
 
 .form-grid {
@@ -1104,6 +1121,15 @@
 
 .sharing-admin-input {
   width: 110px;
+  text-align: right;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  font-size: 0.85rem;
+}
+
+.sharing-admin-nama-input {
+  width: 160px;
   text-align: right;
   padding: 0.25rem 0.4rem;
   border: 1px solid var(--color-border);

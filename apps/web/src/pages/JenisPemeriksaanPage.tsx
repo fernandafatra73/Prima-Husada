@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { PDFViewer, pdf } from '@react-pdf/renderer';
 import { ConfirmModal } from '../components/ui/ConfirmModal.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
 import { ListPageShell } from '../components/ui/ListPageShell.tsx';
@@ -9,7 +10,29 @@ import { useMutationReload } from '../hooks/useMutationReload.ts';
 import { usePaginatedList } from '../hooks/usePaginatedList.ts';
 import { apiDelete, apiPatch, apiPost } from '../lib/api.ts';
 import { formatRupiah } from '../lib/format.ts';
+import {
+  JenisPemeriksaanReportDocument,
+  type JenisPemeriksaanReportData,
+} from '../pdf/JenisPemeriksaanReportDocument.tsx';
+import { loadLogoDataUrl } from '../pdf/loadLogoDataUrl.ts';
 import '../components/ui/ui.css';
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function formatTanggalCetak(): string {
+  return new Date().toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+}
 
 interface Jenis {
   readonly id: string;
@@ -45,6 +68,9 @@ export function JenisPemeriksaanPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [previewItem, setPreviewItem] = useState<Jenis | null>(null);
+  const [logoSrc, setLogoSrc] = useState('');
+  const [printing, setPrinting] = useState(false);
 
   const stats = useMemo(() => {
     const withHarga = items.filter((j) => j.harga !== null).length;
@@ -105,6 +131,36 @@ export function JenisPemeriksaanPage() {
       setError(err instanceof Error ? err.message : 'Gagal menghapus');
     } finally {
       setDeleteLoading(false);
+    }
+  }
+
+  function buildReportData(j: Jenis): JenisPemeriksaanReportData {
+    const sharingInfo = getSharingInfo(j.nama);
+    return {
+      logoSrc,
+      nama: j.nama,
+      hargaFormatted: j.harga ? formatRupiah(j.harga) : 'Belum diatur',
+      sharingAmountText: sharingInfo.amountText,
+      sharingNote: sharingInfo.note,
+      tanggalCetak: formatTanggalCetak(),
+    };
+  }
+
+  function openPreview(j: Jenis) {
+    setPreviewItem(j);
+    if (!logoSrc) {
+      void loadLogoDataUrl().then(setLogoSrc).catch(() => setLogoSrc(''));
+    }
+  }
+
+  async function handlePrint(j: Jenis) {
+    setPrinting(true);
+    try {
+      const blob = await pdf(<JenisPemeriksaanReportDocument data={buildReportData(j)} />).toBlob();
+      const cleanName = j.nama.trim().replace(/[/\\?%*:|"<>]/g, '_') || 'Pemeriksaan';
+      downloadBlob(blob, `Info_Harga_${cleanName}.pdf`);
+    } finally {
+      setPrinting(false);
     }
   }
 
@@ -188,6 +244,8 @@ export function JenisPemeriksaanPage() {
                       <TableRowActions
                         onEdit={() => openEdit(j)}
                         onDelete={() => setDeleteTarget({ id: j.id, label: j.nama })}
+                        onPrint={() => openPreview(j)}
+                        printLabel="Cetak preview"
                       />
                     </td>
                   </tr>
@@ -253,6 +311,40 @@ export function JenisPemeriksaanPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void confirmDelete()}
       />
+
+      {previewItem && (
+        <Modal
+          title={`Preview Harga — ${previewItem.nama}`}
+          open={true}
+          onClose={() => setPreviewItem(null)}
+          size="lg"
+        >
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={() => void handlePrint(previewItem)}
+              disabled={printing}
+            >
+              {printing ? 'Membuat PDF...' : '🖨️ Cetak PDF'}
+            </button>
+          </div>
+          <div
+            style={{
+              width: '100%',
+              height: '500px',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-card)',
+              overflow: 'hidden',
+              background: '#525659',
+            }}
+          >
+            <PDFViewer style={{ width: '100%', height: '100%', border: 'none' }}>
+              <JenisPemeriksaanReportDocument data={buildReportData(previewItem)} />
+            </PDFViewer>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

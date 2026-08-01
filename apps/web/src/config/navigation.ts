@@ -14,11 +14,20 @@ export interface NavCategory {
 
 export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
   {
+    id: 'templet',
+    label: 'Templet',
+    iconName: 'document',
+    items: [
+      { id: 'templet', label: 'Templet', shortLabel: 'Templet' },
+    ],
+  },
+  {
     id: 'pendaftaran',
     label: 'Pendaftaran',
     iconName: 'clipboard',
     items: [
       { id: 'pendaftaran-umum', label: 'Pendaftaran Umum', shortLabel: 'Pendaftaran Umum' },
+      { id: 'transfer', label: 'Transfer', shortLabel: 'Transfer' },
     ],
   },
   {
@@ -29,10 +38,20 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
       { id: 'pasien', label: 'Data & Registrasi Pasien', shortLabel: 'Registrasi Pasien' },
       { id: 'radiolog', label: 'Pekerjaan Radiolog', shortLabel: 'Pekerjaan Radiolog' },
       { id: 'radiolog-duplikat', label: 'Duplikat Radiologi', shortLabel: 'Duplikat Radiologi' },
+      { id: 'kwitansi-radiologi', label: 'Kwitansi', shortLabel: 'Kwitansi' },
+      { id: 'sharing-radiologi', label: 'Sharing Radiologi', shortLabel: 'Sharing Radiologi' },
       { id: 'cetak-al', label: 'Cetak A+L (Amplop & Label)', shortLabel: 'Cetak A+L' },
       { id: 'jenis-pemeriksaan', label: 'Jenis Pemeriksaan, Harga & Sharing', shortLabel: 'Jenis Pemeriksaan' },
       { id: 'kesan', label: 'Master Kesan (Expertise)', shortLabel: 'Master Kesan' },
       { id: 'radiolog-master', label: 'Master Radiolog', shortLabel: 'Master Radiolog' },
+      { id: 'radiografer', label: 'Radiografer', shortLabel: 'Radiografer' },
+      { id: 'kondisi-alat', label: 'Kondisi Alat', shortLabel: 'Kondisi Alat' },
+      { id: 'logbook-pasien', label: 'Logbook Pasien', shortLabel: 'Logbook Pasien' },
+      { id: 'gaji-karyawan', label: 'Daftar Gaji Karyawan', shortLabel: 'Gaji Karyawan' },
+      { id: 'karyawan-radiologi', label: 'Daftar Karyawan', shortLabel: 'Daftar Karyawan' },
+      { id: 'advantage', label: 'Advantage', shortLabel: 'Advantage' },
+      { id: 'bhp-radiologi', label: 'BHP', shortLabel: 'BHP' },
+      { id: 'analisa-foto-rontgen', label: 'Analisa Foto Rontgen', shortLabel: 'Analisa Foto Rontgen' },
     ],
   },
   {
@@ -41,11 +60,17 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
     iconName: 'flask',
     items: [
       { id: 'lab', label: 'Registrasi Lab', shortLabel: 'Registrasi Lab' },
+      { id: 'lab-duplikat', label: 'Duplikat Registrasi Lab', shortLabel: 'Duplikat Registrasi' },
+      { id: 'kwitansi-laboratorium', label: 'Kwitansi', shortLabel: 'Kwitansi' },
+      { id: 'sharing-lab', label: 'Sharing Lab', shortLabel: 'Sharing Lab' },
       { id: 'harga-pemeriksaan-lab', label: 'Harga Pemeriksaan Lab', shortLabel: 'Harga Pemeriksaan Lab' },
-      { id: 'cetak-al', label: 'Cetak A+L (Amplop & Label)', shortLabel: 'Cetak A+L' },
+      { id: 'cetak-amplop-lab', label: 'Cetak Amplop', shortLabel: 'Cetak Amplop' },
+      { id: 'cetak-label-lab', label: 'Cetak Label', shortLabel: 'Cetak Label' },
       { id: 'paket-lab-master', label: 'Jenis Pemeriksaan Lab', shortLabel: 'Jenis Pemeriksaan Lab' },
-      { id: 'petugas-lab-master', label: 'Master Petugas Laboratorium', shortLabel: 'Petugas Lab' },
+      { id: 'petugas-lab-master', label: 'Master Analis Laboratorium', shortLabel: 'Analis' },
       { id: 'klasifikasi-paket', label: 'Klasifikasi Paket', shortLabel: 'Klasifikasi Paket' },
+      { id: 'hitungan-led', label: 'Hitungan LED', shortLabel: 'Hitungan LED' },
+      { id: 'karyawan-laboratorium', label: 'Daftar Karyawan', shortLabel: 'Daftar Karyawan' },
     ],
   },
   {
@@ -54,8 +79,11 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
     iconName: 'currency',
     items: [
       { id: 'keuangan-pembukuan', label: 'Sistem Keuangan & Pembukuan', shortLabel: 'Buku Kas & Keuangan' },
+      { id: 'petugas-kasir', label: 'Petugas Kasir', shortLabel: 'Petugas Kasir' },
       { id: 'sharing', label: 'Manajemen Sharing Dokter', shortLabel: 'Sharing Dokter' },
       { id: 'laporan-tahunan', label: 'Laporan Tahunan', shortLabel: 'Laporan Tahunan' },
+      { id: 'laporan-pajak', label: 'Laporan Pajak', shortLabel: 'Laporan Pajak' },
+      { id: 'laporan-neraca', label: 'Laporan Neraca', shortLabel: 'Laporan Neraca' },
     ],
   },
   {
@@ -89,25 +117,49 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
 ];
 
 export const MAIN_NAV_ITEMS: readonly NavItem[] = [
+  { id: 'templet', label: 'Templet', shortLabel: 'Templet' },
+  { id: 'musik-ph', label: 'Musik-PH', shortLabel: 'Musik-PH' },
+  { id: 'fatra', label: 'Fatra', shortLabel: 'Fatra' },
   { id: 'pasien', label: 'Data & Registrasi Pasien', shortLabel: 'Registrasi Pasien' },
   { id: 'pendaftaran-umum', label: 'Pendaftaran Umum', shortLabel: 'Pendaftaran Umum' },
+  { id: 'transfer', label: 'Transfer', shortLabel: 'Transfer' },
   { id: 'absensi', label: 'Daftar Hadir Karyawan', shortLabel: 'Presensi Staff' },
   { id: 'farmasi-bhp', label: 'Manajemen Farmasi & BHP', shortLabel: 'Stok Obat & BHP' },
   { id: 'keuangan-pembukuan', label: 'Sistem Keuangan & Pembukuan', shortLabel: 'Buku Kas & Keuangan' },
+  { id: 'petugas-kasir', label: 'Petugas Kasir', shortLabel: 'Petugas Kasir' },
   { id: 'lab', label: 'Registrasi Lab', shortLabel: 'Registrasi Lab' },
+  { id: 'lab-duplikat', label: 'Duplikat Registrasi Lab', shortLabel: 'Duplikat Registrasi' },
+  { id: 'kwitansi-laboratorium', label: 'Kwitansi Laboratorium', shortLabel: 'Kwitansi' },
+  { id: 'sharing-lab', label: 'Sharing Lab', shortLabel: 'Sharing Lab' },
   { id: 'harga-pemeriksaan-lab', label: 'Harga Pemeriksaan Lab', shortLabel: 'Harga Pemeriksaan Lab' },
+  { id: 'cetak-amplop-lab', label: 'Cetak Amplop (Laboratorium)', shortLabel: 'Cetak Amplop' },
+  { id: 'cetak-label-lab', label: 'Cetak Label (Laboratorium)', shortLabel: 'Cetak Label' },
   { id: 'paket-lab-master', label: 'Jenis Pemeriksaan Lab', shortLabel: 'Jenis Pemeriksaan Lab' },
-  { id: 'petugas-lab-master', label: 'Master Petugas Laboratorium', shortLabel: 'Petugas Lab' },
+  { id: 'petugas-lab-master', label: 'Master Analis Laboratorium', shortLabel: 'Analis' },
   { id: 'klasifikasi-paket', label: 'Klasifikasi Paket', shortLabel: 'Klasifikasi Paket' },
+  { id: 'hitungan-led', label: 'Hitungan LED', shortLabel: 'Hitungan LED' },
+  { id: 'karyawan-laboratorium', label: 'Daftar Karyawan Laboratorium', shortLabel: 'Daftar Karyawan' },
   { id: 'sharing', label: 'Manajemen Sharing Dokter', shortLabel: 'Sharing Dokter' },
   { id: 'laporan-tahunan', label: 'Laporan Tahunan', shortLabel: 'Laporan Tahunan' },
+  { id: 'laporan-pajak', label: 'Laporan Pajak', shortLabel: 'Laporan Pajak' },
+  { id: 'laporan-neraca', label: 'Laporan Neraca', shortLabel: 'Laporan Neraca' },
   { id: 'radiolog', label: 'Pekerjaan Radiolog', shortLabel: 'Pekerjaan Radiolog' },
   { id: 'radiolog-duplikat', label: 'Duplikat Radiologi', shortLabel: 'Duplikat Radiologi' },
+  { id: 'kwitansi-radiologi', label: 'Kwitansi Radiologi', shortLabel: 'Kwitansi' },
+  { id: 'sharing-radiologi', label: 'Sharing Radiologi', shortLabel: 'Sharing Radiologi' },
   { id: 'cetak-al', label: 'Cetak A+L (Amplop & Label)', shortLabel: 'Cetak A+L' },
   { id: 'dokter', label: 'Manajemen Dokter', shortLabel: 'Dokter' },
   { id: 'jenis-pemeriksaan', label: 'Manajemen Jenis Pemeriksaan', shortLabel: 'Jenis Pemeriksaan' },
   { id: 'kesan', label: 'Manajemen Kesan', shortLabel: 'Kesan' },
   { id: 'radiolog-master', label: 'Manajemen Radiolog', shortLabel: 'Radiolog (Master)' },
+  { id: 'radiografer', label: 'Radiografer', shortLabel: 'Radiografer' },
+  { id: 'kondisi-alat', label: 'Kondisi Alat', shortLabel: 'Kondisi Alat' },
+  { id: 'logbook-pasien', label: 'Logbook Pasien', shortLabel: 'Logbook Pasien' },
+  { id: 'gaji-karyawan', label: 'Daftar Gaji Karyawan', shortLabel: 'Gaji Karyawan' },
+  { id: 'karyawan-radiologi', label: 'Daftar Karyawan Radiologi', shortLabel: 'Daftar Karyawan' },
+  { id: 'advantage', label: 'Advantage Radiologi', shortLabel: 'Advantage' },
+  { id: 'bhp-radiologi', label: 'BHP Radiologi', shortLabel: 'BHP' },
+  { id: 'analisa-foto-rontgen', label: 'Analisa Foto Rontgen', shortLabel: 'Analisa Foto Rontgen' },
   { id: 'role', label: 'Manajemen Role', shortLabel: 'Role' },
   { id: 'admin', label: 'Manajemen Admin', shortLabel: 'Admin' },
 ] as const;
@@ -145,4 +197,22 @@ export function getNavLabel(id: AppViewId): string {
   }
   const item = MAIN_NAV_ITEMS.find((n) => n.id === id);
   return item?.label ?? id;
+}
+
+export type StaffRole = 'ADMIN' | 'KARYAWAN';
+
+/** Menu/halaman yang hanya boleh diakses role manajemen (ADMIN). */
+export const MANAGEMENT_ONLY_NAV_IDS: ReadonlySet<AppViewId> = new Set([
+  'keuangan-pembukuan',
+  'sharing',
+  'laporan-tahunan',
+  'laporan-pajak',
+  'laporan-neraca',
+  'role',
+  'admin',
+]);
+
+export function isViewAllowedForRole(id: AppViewId, role: StaffRole): boolean {
+  if (role === 'ADMIN') return true;
+  return !MANAGEMENT_ONLY_NAV_IDS.has(id);
 }

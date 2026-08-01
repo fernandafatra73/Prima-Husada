@@ -6,6 +6,7 @@ interface SharingPdfPreviewModalProps {
   readonly blob: Blob | null;
   readonly filename: string;
   readonly onClose: () => void;
+  readonly title?: string;
 }
 
 export function SharingPdfPreviewModal({
@@ -13,6 +14,7 @@ export function SharingPdfPreviewModal({
   blob,
   filename,
   onClose,
+  title = 'Pratinjau Laporan Sharing Dokter',
 }: SharingPdfPreviewModalProps) {
   const [url, setUrl] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -46,7 +48,7 @@ export function SharingPdfPreviewModal({
   }
 
   return (
-    <Modal open={open} title="Pratinjau Laporan Sharing Dokter" onClose={onClose} size="xl">
+    <Modal open={open} title={title} onClose={onClose} size="xl">
       <div className="pdf-preview">
         <div className="pdf-preview__toolbar">
           <button type="button" className="btn btn--primary" onClick={handlePrint}>

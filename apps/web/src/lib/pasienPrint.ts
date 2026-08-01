@@ -16,7 +16,7 @@ interface PasienPrintSource {
   readonly pemeriksaan: readonly { readonly nama: string }[];
 }
 
-function formatRadiologName(nama: string | undefined): string {
+export function formatRadiologName(nama: string | undefined | null): string {
   if (!nama) {
     return '—';
   }

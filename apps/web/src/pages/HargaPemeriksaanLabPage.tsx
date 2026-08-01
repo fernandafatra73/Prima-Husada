@@ -25,7 +25,7 @@ export interface PaketLabData {
 }
 
 const TAB_CATEGORIES = [
-  'Pemeriksaan hematologi',
+  'Hematologi',
   'Kimia darah',
   'Diabetes',
   'Urinalisa',

@@ -1,0 +1,11 @@
+-- CreateTable
+CREATE TABLE "KondisiAlat" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "namaPasien" TEXT NOT NULL,
+    "kv" DECIMAL NOT NULL,
+    "sekon" DECIMAL NOT NULL,
+    "mAs" DECIMAL NOT NULL,
+    "tanggal" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);

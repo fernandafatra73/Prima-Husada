@@ -1,0 +1,645 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ListPageShell } from '../components/ui/ListPageShell.tsx';
+import { Modal } from '../components/ui/Modal.tsx';
+import { ModalFormFooter } from '../components/ui/ModalFormFooter.tsx';
+import { SharingPdfPreviewModal } from '../components/ui/SharingPdfPreviewModal.tsx';
+import { TableRowActions } from '../components/ui/TableRowActions.tsx';
+import {
+  useListQueryParams,
+  useListSearch,
+} from '../hooks/useListQueryParams.ts';
+import { useMutationReload } from '../hooks/useMutationReload.ts';
+import { usePaginatedList } from '../hooks/usePaginatedList.ts';
+import { apiGet, apiPatch } from '../lib/api.ts';
+import { formatDateShort, formatRupiah } from '../lib/format.ts';
+import type { PaginatedResponse } from '../lib/pagination.ts';
+import {
+  generateSharingArsipReportBlob,
+  printSharingArsipReport,
+} from '../pdf/printSharingArsipReport.tsx';
+import '../components/ui/ui.css';
+
+interface DokterItem {
+  readonly id: string;
+  readonly nama: string;
+}
+
+interface ArsipPasienItem {
+  readonly id: string;
+  readonly regCode: string;
+  readonly nama: string;
+  readonly alamat: string | null;
+  readonly pengirimNama: string;
+  readonly pemeriksaanNama: string;
+  readonly paymentStatus: 'BELUM_LUNAS' | 'LUNAS';
+  readonly totalHarga: string;
+  readonly createdAt: string;
+}
+
+type PeriodType = 'all' | 'today' | 'week' | 'month' | 'custom';
+
+function getPeriodDates(
+  period: PeriodType,
+  customStart: string,
+  customEnd: string,
+) {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
+  if (period === 'custom') {
+    return { startDate: customStart, endDate: customEnd };
+  }
+  if (period === 'today') {
+    return { startDate: todayStr, endDate: todayStr };
+  }
+  if (period === 'week') {
+    const start = new Date(now);
+    start.setDate(now.getDate() - 7);
+    const sy = start.getFullYear();
+    const sm = String(start.getMonth() + 1).padStart(2, '0');
+    const sd = String(start.getDate()).padStart(2, '0');
+    return { startDate: `${sy}-${sm}-${sd}`, endDate: todayStr };
+  }
+  if (period === 'month') {
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const fy = firstDay.getFullYear();
+    const fm = String(firstDay.getMonth() + 1).padStart(2, '0');
+    const fd = String(firstDay.getDate()).padStart(2, '0');
+    return { startDate: `${fy}-${fm}-${fd}`, endDate: todayStr };
+  }
+  return { startDate: '', endDate: '' };
+}
+
+interface SharingArsipPageProps {
+  readonly modul: 'RADIOLOGI' | 'LABORATORIUM';
+}
+
+export function SharingArsipPage({ modul }: SharingArsipPageProps) {
+  const { search, setSearch } = useListSearch();
+  const [dokterList, setDokterList] = useState<DokterItem[]>([]);
+  const [selectedDokterNama, setSelectedDokterNama] = useState<string>('all');
+  const [period, setPeriod] = useState<PeriodType>('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+
+  const { startDate, endDate } = useMemo(
+    () => getPeriodDates(period, customStart, customEnd),
+    [period, customStart, customEnd],
+  );
+
+  const listParams = useMemo(() => {
+    const params: Record<string, string> = { modul };
+    if (selectedDokterNama !== 'all') params.pengirimNama = selectedDokterNama;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    return params;
+  }, [modul, selectedDokterNama, startDate, endDate]);
+
+  const queryParams = useListQueryParams(listParams, search);
+  const {
+    items,
+    pagination,
+    setPage,
+    loading,
+    error,
+    setError,
+    reload: reloadList,
+  } = usePaginatedList<ArsipPasienItem>('/api/pasien-duplikat', queryParams);
+  const reload = useMutationReload(reloadList);
+
+  const [editing, setEditing] = useState<ArsipPasienItem | null>(null);
+  const [editForm, setEditForm] = useState({
+    nama: '',
+    alamat: '',
+    pengirimNama: '',
+    pemeriksaanNama: '',
+    totalHarga: '0',
+    paymentStatus: 'BELUM_LUNAS' as 'BELUM_LUNAS' | 'LUNAS',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  function openEdit(item: ArsipPasienItem) {
+    setEditForm({
+      nama: item.nama,
+      alamat: item.alamat ?? '',
+      pengirimNama: item.pengirimNama,
+      pemeriksaanNama: item.pemeriksaanNama,
+      totalHarga: item.totalHarga,
+      paymentStatus: item.paymentStatus,
+    });
+    setError(null);
+    setEditing(item);
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    setSavingEdit(true);
+    setError(null);
+    try {
+      await apiPatch(`/api/pasien-duplikat/${editing.id}`, {
+        nama: editForm.nama,
+        alamat: editForm.alamat || undefined,
+        pengirimNama: editForm.pengirimNama,
+        pemeriksaanNama: editForm.pemeriksaanNama,
+        totalHarga: Number(editForm.totalHarga) || 0,
+        paymentStatus: editForm.paymentStatus,
+      });
+      setEditing(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan perubahan arsip');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  const loadDokterList = useCallback(async () => {
+    try {
+      const res = await apiGet<PaginatedResponse<DokterItem>>(
+        '/api/dokter?page=1&limit=200',
+      );
+      setDokterList(res.items);
+    } catch {
+      setDokterList([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDokterList();
+  }, [loadDokterList]);
+
+  const totalPendapatan = useMemo(
+    () => items.reduce((sum, item) => sum + (Number(item.totalHarga) || 0), 0),
+    [items],
+  );
+
+  const [printingPdf, setPrintingPdf] = useState(false);
+  const [previewingPdf, setPreviewingPdf] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
+  const [previewFilename, setPreviewFilename] = useState('Laporan_Sharing.pdf');
+
+  const moduleLabel = modul === 'RADIOLOGI' ? 'Radiologi' : 'Laboratorium';
+
+  const periodeLabel = useMemo(() => {
+    if (period === 'today') return 'Hari Ini';
+    if (period === 'week') return 'Minggu Ini';
+    if (period === 'month') return 'Bulan Ini';
+    if (period === 'custom') {
+      return `${formatDateShort(customStart || '—')} s/d ${formatDateShort(customEnd || '—')}`;
+    }
+    return 'Semua Periode';
+  }, [period, customStart, customEnd]);
+
+  function buildReportInput() {
+    const todayStr = formatDateShort(new Date().toISOString());
+    const pdfItems = items.map((p, idx) => ({
+      no: (pagination.page - 1) * pagination.limit + idx + 1,
+      nama: p.nama,
+      regCode: p.regCode,
+      tanggal: formatDateShort(p.createdAt),
+      alamat: p.alamat || '—',
+      pemeriksaan: p.pemeriksaanNama || '—',
+      totalHargaFormatted: formatRupiah(p.totalHarga),
+    }));
+
+    return {
+      moduleLabel,
+      dokterNama:
+        selectedDokterNama === 'all' ? 'Semua Dokter' : selectedDokterNama,
+      periodeLabel,
+      tanggalCetak: todayStr,
+      items: pdfItems,
+      totalPasien: pagination.total,
+      totalPendapatanFormatted: formatRupiah(totalPendapatan),
+      adminNama: '',
+    };
+  }
+
+  async function handlePrintPdf() {
+    setPrintingPdf(true);
+    try {
+      await printSharingArsipReport(buildReportInput());
+    } catch (err) {
+      console.error('Gagal mencetak PDF sharing:', err);
+    } finally {
+      setPrintingPdf(false);
+    }
+  }
+
+  async function handlePreviewPdf() {
+    setPreviewingPdf(true);
+    try {
+      const input = buildReportInput();
+      const blob = await generateSharingArsipReportBlob(input);
+      const cleanDokter =
+        input.dokterNama.trim().replace(/[/\\?%*:|"<>]/g, '_') || 'Dokter';
+      setPreviewFilename(`Laporan_Sharing_${moduleLabel}_${cleanDokter}.pdf`);
+      setPreviewBlob(blob);
+      setPreviewModalOpen(true);
+    } catch (err) {
+      console.error('Gagal membuat pratinjau PDF sharing:', err);
+    } finally {
+      setPreviewingPdf(false);
+    }
+  }
+
+  const title = modul === 'RADIOLOGI' ? 'Sharing Radiologi' : 'Sharing Lab';
+  const subtitle =
+    modul === 'RADIOLOGI'
+      ? 'Laporan pasien & pendapatan radiologi per dokter pengirim, dari arsip Duplikat Radiologi'
+      : 'Laporan pasien & pendapatan laboratorium per dokter pengirim, dari arsip Duplikat Lab';
+
+  return (
+    <>
+      <ListPageShell
+        title={title}
+        subtitle={subtitle}
+        metrics={[
+          {
+            label: 'Total pasien',
+            value: String(pagination.total),
+            tone: 'blue',
+            iconKind: 'clipboard',
+          },
+          {
+            label: 'Dokter dipilih',
+            value:
+              selectedDokterNama === 'all'
+                ? 'Semua Dokter'
+                : selectedDokterNama,
+            tone: 'green',
+            iconKind: 'document',
+          },
+          {
+            label: 'Total pendapatan',
+            value: formatRupiah(totalPendapatan),
+            tone: 'violet',
+            iconKind: 'percent',
+          },
+        ]}
+        searchPlaceholder="Cari nama pasien, reg code, alamat..."
+        searchValue={search}
+        onSearchChange={setSearch}
+        onRefresh={() => void reload()}
+        error={error}
+        loading={loading}
+        pagination={pagination}
+        onPageChange={setPage}
+      >
+        <div className="filter-bar" style={{ marginBottom: '1.25rem' }}>
+          <div className="form-field" style={{ minWidth: '220px' }}>
+            <label htmlFor="filter-dokter-arsip">Dokter Pengirim</label>
+            <select
+              id="filter-dokter-arsip"
+              value={selectedDokterNama}
+              onChange={(e) => {
+                setSelectedDokterNama(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="all">Semua Dokter Pengirim</option>
+              {dokterList.map((d) => (
+                <option key={d.id} value={d.nama}>
+                  {d.nama}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label>Periode Waktu</label>
+            <div className="filter-pills">
+              <button
+                type="button"
+                className={`filter-pill ${period === 'all' ? 'filter-pill--active' : ''}`}
+                onClick={() => {
+                  setPeriod('all');
+                  setPage(1);
+                }}
+              >
+                Semua
+              </button>
+              <button
+                type="button"
+                className={`filter-pill ${period === 'today' ? 'filter-pill--active' : ''}`}
+                onClick={() => {
+                  setPeriod('today');
+                  setPage(1);
+                }}
+              >
+                Pasien Hari Ini
+              </button>
+              <button
+                type="button"
+                className={`filter-pill ${period === 'week' ? 'filter-pill--active' : ''}`}
+                onClick={() => {
+                  setPeriod('week');
+                  setPage(1);
+                }}
+              >
+                Pasien Minggu Ini
+              </button>
+              <button
+                type="button"
+                className={`filter-pill ${period === 'month' ? 'filter-pill--active' : ''}`}
+                onClick={() => {
+                  setPeriod('month');
+                  setPage(1);
+                }}
+              >
+                Pasien Bulan Ini
+              </button>
+              <button
+                type="button"
+                className={`filter-pill ${period === 'custom' ? 'filter-pill--active' : ''}`}
+                onClick={() => {
+                  setPeriod('custom');
+                  setPage(1);
+                }}
+              >
+                Kustom
+              </button>
+            </div>
+          </div>
+
+          {period === 'custom' && (
+            <>
+              <div className="form-field">
+                <label htmlFor="arsip-start-date">Dari Tanggal</label>
+                <input
+                  id="arsip-start-date"
+                  type="date"
+                  value={customStart}
+                  onChange={(e) => {
+                    setCustomStart(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="arsip-end-date">Sampai Tanggal</label>
+                <input
+                  id="arsip-end-date"
+                  type="date"
+                  value={customEnd}
+                  onChange={(e) => {
+                    setCustomEnd(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+            </>
+          )}
+
+          <div
+            className="form-field"
+            style={{
+              alignSelf: 'flex-end',
+              marginLeft: 'auto',
+              display: 'flex',
+              gap: '0.5rem',
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => void handlePrintPdf()}
+              disabled={printingPdf || previewingPdf}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+              }}
+            >
+              <span>🖨️</span>
+              {printingPdf ? 'Membuat PDF...' : 'Cetak PDF'}
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => void handlePreviewPdf()}
+              disabled={previewingPdf || printingPdf}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+              }}
+            >
+              <span>👁️</span>
+              {previewingPdf ? 'Memuat Pratinjau...' : 'Preview PDF'}
+            </button>
+          </div>
+        </div>
+
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th style={{ width: '50px' }}>No</th>
+              <th>Tanggal &amp; No. Reg</th>
+              <th>Nama Pasien</th>
+              <th>Dokter Pengirim</th>
+              <th>Pemeriksaan</th>
+              <th style={{ textAlign: 'right' }}>Total Harga</th>
+              <th style={{ width: '110px', textAlign: 'center' }}>Bayar</th>
+              <th style={{ width: '70px' }}>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={8}
+                  style={{
+                    textAlign: 'center',
+                    padding: '2.5rem',
+                    color: '#64748b',
+                  }}
+                >
+                  Belum ada data arsip untuk kriteria ini.
+                </td>
+              </tr>
+            ) : (
+              items.map((p, idx) => {
+                const isLunas = p.paymentStatus === 'LUNAS';
+                return (
+                  <tr key={p.id}>
+                    <td>
+                      {(pagination.page - 1) * pagination.limit + idx + 1}
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 700, color: '#0369a1' }}>
+                        {p.regCode}
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                        {formatDateShort(p.createdAt)}
+                      </div>
+                    </td>
+                    <td>
+                      <strong>{p.nama}</strong>
+                      {p.alamat && (
+                        <div
+                          style={{
+                            fontSize: '0.78rem',
+                            color: 'var(--color-text-muted)',
+                          }}
+                        >
+                          {p.alamat}
+                        </div>
+                      )}
+                    </td>
+                    <td>{p.pengirimNama}</td>
+                    <td>{p.pemeriksaanNama || '—'}</td>
+                    <td
+                      style={{
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        color: 'var(--color-primary)',
+                      }}
+                    >
+                      {formatRupiah(p.totalHarga)}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '0.2rem 0.6rem',
+                          borderRadius: '999px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: isLunas ? '#15803d' : '#b91c1c',
+                          background: isLunas ? '#f0fdf4' : '#fef2f2',
+                          border: `1px solid ${isLunas ? '#bbf7d0' : '#fecaca'}`,
+                        }}
+                      >
+                        {isLunas ? 'LUNAS' : 'BELUM LUNAS'}
+                      </span>
+                    </td>
+                    <td>
+                      <TableRowActions
+                        onEdit={() => openEdit(p)}
+                        editLabel="Ubah data arsip"
+                      />
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+          {items.length > 0 && (
+            <tfoot>
+              <tr>
+                <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700 }}>
+                  Total Pendapatan (halaman ini)
+                </td>
+                <td
+                  style={{
+                    textAlign: 'right',
+                    fontWeight: 700,
+                    color: 'var(--color-primary)',
+                  }}
+                >
+                  {formatRupiah(totalPendapatan)}
+                </td>
+                <td />
+                <td />
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </ListPageShell>
+
+      {editing && (
+        <Modal
+          open={true}
+          title={`Ubah Data Arsip — ${editing.regCode}`}
+          onClose={() => setEditing(null)}
+        >
+          <form onSubmit={(e) => void handleEditSubmit(e)} className="form-grid">
+            <div className="form-field form-field--full">
+              <label htmlFor="sharing-edit-nama">Nama Pasien *</label>
+              <input
+                id="sharing-edit-nama"
+                required
+                value={editForm.nama}
+                onChange={(e) => setEditForm((f) => ({ ...f, nama: e.target.value }))}
+              />
+            </div>
+            <div className="form-field form-field--full">
+              <label htmlFor="sharing-edit-alamat">Alamat</label>
+              <input
+                id="sharing-edit-alamat"
+                value={editForm.alamat}
+                onChange={(e) => setEditForm((f) => ({ ...f, alamat: e.target.value }))}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="sharing-edit-pengirim">Dokter Pengirim *</label>
+              <input
+                id="sharing-edit-pengirim"
+                required
+                value={editForm.pengirimNama}
+                onChange={(e) => setEditForm((f) => ({ ...f, pengirimNama: e.target.value }))}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="sharing-edit-pemeriksaan">Pemeriksaan *</label>
+              <input
+                id="sharing-edit-pemeriksaan"
+                required
+                value={editForm.pemeriksaanNama}
+                onChange={(e) => setEditForm((f) => ({ ...f, pemeriksaanNama: e.target.value }))}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="sharing-edit-harga">Total Harga (Rp) *</label>
+              <input
+                id="sharing-edit-harga"
+                type="number"
+                min="0"
+                step="1"
+                required
+                value={editForm.totalHarga}
+                onChange={(e) => setEditForm((f) => ({ ...f, totalHarga: e.target.value }))}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="sharing-edit-bayar">Status Bayar *</label>
+              <select
+                id="sharing-edit-bayar"
+                required
+                value={editForm.paymentStatus}
+                onChange={(e) =>
+                  setEditForm((f) => ({
+                    ...f,
+                    paymentStatus: e.target.value as 'BELUM_LUNAS' | 'LUNAS',
+                  }))
+                }
+              >
+                <option value="BELUM_LUNAS">Belum Lunas</option>
+                <option value="LUNAS">Lunas</option>
+              </select>
+            </div>
+            <ModalFormFooter
+              onCancel={() => setEditing(null)}
+              submitLabel="Simpan Perubahan"
+              loading={savingEdit}
+            />
+          </form>
+        </Modal>
+      )}
+
+      <SharingPdfPreviewModal
+        open={previewModalOpen}
+        blob={previewBlob}
+        filename={previewFilename}
+        onClose={() => setPreviewModalOpen(false)}
+        title={`Pratinjau Laporan Sharing ${moduleLabel}`}
+      />
+    </>
+  );
+}

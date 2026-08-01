@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ConfirmModal } from '../components/ui/ConfirmModal.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
 import { ModalFormFooter } from '../components/ui/ModalFormFooter.tsx';
 import { ListPageShell } from '../components/ui/ListPageShell.tsx';
 import { TableRowActions } from '../components/ui/TableRowActions.tsx';
-import { ExpertiseModal } from '../components/ExpertiseModal.tsx';
-import { PemeriksaanPenunjangModal } from '../components/PemeriksaanPenunjangModal.tsx';
 import { parseKlinisData, serializeKlinisData } from '../lib/penunjang.ts';
 import { useListQueryParams, useListSearch } from '../hooks/useListQueryParams.ts';
 import { useListRefresh } from '../context/ListRefreshContext.tsx';
@@ -54,29 +52,10 @@ interface PendaftaranUmumItem {
   readonly admin: string | null;
 }
 
-interface KesanTemplateItem {
-  readonly id: string;
-  readonly judul: string;
-  readonly isi: string;
-}
-
 interface Staff {
   readonly id: string;
   readonly nama: string;
 }
-
-const DEFAULT_KESAN_TEMPLATES: readonly KesanTemplateItem[] = [
-  {
-    id: 'default-thorax',
-    judul: 'Thorax',
-    isi: 'Tb paru aktif kanan dan kiri\nTidak tampak cardiomegali',
-  },
-  {
-    id: 'default-normal',
-    judul: 'Thorax Normal',
-    isi: 'Cor dan pulmo dalam batas normal.\nTidak tampak infiltrat.',
-  },
-];
 
 interface PasienRow {
   readonly id: string;
@@ -173,11 +152,9 @@ export function PasienPage() {
   const [dokter, setDokter] = useState<Dokter[]>([]);
   const [radiologList, setRadiologList] = useState<Radiolog[]>([]);
   const [jenis, setJenis] = useState<Jenis[]>([]);
-  const [kesanTemplates, setKesanTemplates] = useState<KesanTemplateItem[]>([]);
   const [pendaftaranList, setPendaftaranList] = useState<PendaftaranUmumItem[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [selectedPendaftaranId, setSelectedPendaftaranId] = useState('');
-  const [expertiseModalOpen, setExpertiseModalOpen] = useState(false);
   const [mastersError, setMastersError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -198,17 +175,35 @@ export function PasienPage() {
   const [hasilStatus, setHasilStatus] = useState<'MENUNGGU_HASIL' | 'SELESAI'>('MENUNGGU_HASIL');
   const [paymentStatus, setPaymentStatus] = useState<'BELUM_LUNAS' | 'LUNAS'>('BELUM_LUNAS');
   const [selectedJenis, setSelectedJenis] = useState<string[]>([]);
-  const [radTambahan, setRadTambahan] = useState<string[]>([]);
-  const [labTambahan, setLabTambahan] = useState<string[]>([]);
-  const [penunjangModalOpen, setPenunjangModalOpen] = useState(false);
+  const existingTambahanRef = useRef<{ radTambahan: string[]; labTambahan: string[] }>({
+    radTambahan: [],
+    labTambahan: [],
+  });
   const [sharingAmount, setSharingAmount] = useState('0');
   const [sharingMode, setSharingMode] = useState<string>('auto');
-  const [editJenisModalOpen, setEditJenisModalOpen] = useState(false);
+  const [jenisModalMode, setJenisModalMode] = useState<'add' | 'edit' | null>(null);
   const [editingJenisItem, setEditingJenisItem] = useState<Jenis | null>(null);
   const [editingJenisNama, setEditingJenisNama] = useState('');
   const [editingJenisHarga, setEditingJenisHarga] = useState('');
   const [savingJenis, setSavingJenis] = useState(false);
   const [jenisError, setJenisError] = useState<string | null>(null);
+
+  const [bhpModalOpen, setBhpModalOpen] = useState(false);
+  const [bhpForm, setBhpForm] = useState({
+    tanggal: new Date().toISOString().split('T')[0]!,
+    pemakaian: '',
+    harga: '0',
+    dev: '1000',
+    fixer: '1000',
+    film: '38000',
+    amplopKertas: '1000',
+    listrik: '2000',
+    gajiKaryawan: '2500000',
+    kertasCetak: '2000',
+    amplop: '2000',
+  });
+  const [savingBhp, setSavingBhp] = useState(false);
+  const [bhpError, setBhpError] = useState<string | null>(null);
 
   const umurYears = useMemo(() => {
     if (!isValidBirthDate(tanggalLahir)) return 0;
@@ -250,18 +245,16 @@ export function PasienPage() {
   const loadMasters = useCallback(async () => {
     setMastersError(null);
     try {
-      const [dokterRes, jenisRes, radiologRes, kesanRes, pendaftaranRes, staffRes] = await Promise.all([
+      const [dokterRes, jenisRes, radiologRes, pendaftaranRes, staffRes] = await Promise.all([
         apiGet<PaginatedResponse<Dokter>>('/api/dokter?page=1&limit=200'),
         apiGet<PaginatedResponse<Jenis>>('/api/jenis-pemeriksaan?page=1&limit=200'),
         apiGet<PaginatedResponse<Radiolog>>('/api/radiolog?page=1&limit=200'),
-        apiGet<PaginatedResponse<KesanTemplateItem>>('/api/kesan-template?page=1&limit=200').catch(() => ({ items: [] })),
         apiGet<PaginatedResponse<PendaftaranUmumItem>>('/api/pendaftaran-umum?page=1&limit=300').catch(() => ({ items: [] })),
         apiGet<PaginatedResponse<Staff>>('/api/staff?page=1&limit=200').catch(() => ({ items: [] })),
       ]);
       setDokter(dokterRes.items);
       setJenis(jenisRes.items.filter((j) => j.harga !== null));
       setRadiologList(radiologRes.items);
-      setKesanTemplates(kesanRes.items.length > 0 ? kesanRes.items : Array.from(DEFAULT_KESAN_TEMPLATES));
       setPendaftaranList(pendaftaranRes.items);
       setStaffList(staffRes.items);
     } catch (err: unknown) {
@@ -359,9 +352,7 @@ export function PasienPage() {
     setHasilStatus('MENUNGGU_HASIL');
     setPaymentStatus('BELUM_LUNAS');
     setSelectedJenis([]);
-    setRadTambahan([]);
-    setLabTambahan([]);
-    setPenunjangModalOpen(false);
+    existingTambahanRef.current = { radTambahan: [], labTambahan: [] };
     setSharingAmount('0');
     setSharingMode('auto');
     setEditingId(null);
@@ -387,8 +378,10 @@ export function PasienPage() {
       setAlamat(p.alamat ?? '');
       setPengirimId(p.pengirim.id);
       setKlinis(parsedKlinis.text);
-      setRadTambahan(parsedKlinis.radTambahan);
-      setLabTambahan(parsedKlinis.labTambahan);
+      existingTambahanRef.current = {
+        radTambahan: parsedKlinis.radTambahan,
+        labTambahan: parsedKlinis.labTambahan,
+      };
       setKesan(p.kesan ?? '');
       setAdmin(p.admin ?? '');
       setRadiologId(p.radiolog?.id ?? '');
@@ -451,7 +444,7 @@ export function PasienPage() {
         noTelepon,
         alamat,
         pengirimId,
-        klinis: serializeKlinisData(klinis, radTambahan, labTambahan),
+        klinis: serializeKlinisData(klinis, [], []),
         jenisPemeriksaanIds: selectedJenis,
         sharingAmount: Number(sharingAmount),
         radiologId: radiologId || undefined,
@@ -488,7 +481,11 @@ export function PasienPage() {
         noTelepon,
         alamat,
         pengirimId,
-        klinis: serializeKlinisData(klinis, radTambahan, labTambahan),
+        klinis: serializeKlinisData(
+          klinis,
+          existingTambahanRef.current.radTambahan,
+          existingTambahanRef.current.labTambahan,
+        ),
         hasilStatus,
         paymentStatus,
         sharingAmount: Number(sharingAmount),
@@ -524,17 +521,68 @@ export function PasienPage() {
     }
   }
 
+  function openBhpModal() {
+    setBhpForm({
+      tanggal: new Date().toISOString().split('T')[0]!,
+      pemakaian: '',
+      harga: '0',
+      dev: '1000',
+      fixer: '1000',
+      film: '38000',
+      amplopKertas: '1000',
+      listrik: '2000',
+      gajiKaryawan: '2500000',
+      kertasCetak: '2000',
+      amplop: '2000',
+    });
+    setBhpError(null);
+    setBhpModalOpen(true);
+  }
+
+  async function handleBhpSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSavingBhp(true);
+    setBhpError(null);
+    try {
+      await apiPost('/api/bhp-radiologi', {
+        tanggal: bhpForm.tanggal,
+        pemakaian: bhpForm.pemakaian,
+        harga: Number(bhpForm.harga) || 0,
+        dev: Number(bhpForm.dev) || 0,
+        fixer: Number(bhpForm.fixer) || 0,
+        film: Number(bhpForm.film) || 0,
+        amplopKertas: Number(bhpForm.amplopKertas) || 0,
+        listrik: Number(bhpForm.listrik) || 0,
+        gajiKaryawan: Number(bhpForm.gajiKaryawan) || 0,
+        kertasCetak: Number(bhpForm.kertasCetak) || 0,
+        amplop: Number(bhpForm.amplop) || 0,
+      });
+      setBhpModalOpen(false);
+    } catch (err) {
+      setBhpError(err instanceof Error ? err.message : 'Gagal menyimpan data BHP');
+    } finally {
+      setSavingBhp(false);
+    }
+  }
+
+  function openAddJenisModal() {
+    setEditingJenisItem(null);
+    setEditingJenisNama('');
+    setEditingJenisHarga('');
+    setJenisError(null);
+    setJenisModalMode('add');
+  }
+
   function openEditJenisModal(j: Jenis) {
     setEditingJenisItem(j);
     setEditingJenisNama(j.nama);
     setEditingJenisHarga(j.harga ?? '');
     setJenisError(null);
-    setEditJenisModalOpen(true);
+    setJenisModalMode('edit');
   }
 
   async function onSubmitEditJenis(e: FormEvent) {
     e.preventDefault();
-    if (!editingJenisItem) return;
     if (!editingJenisNama.trim()) {
       setJenisError('Nama jenis pemeriksaan wajib diisi');
       return;
@@ -546,11 +594,18 @@ export function PasienPage() {
     setSavingJenis(true);
     setJenisError(null);
     try {
-      await apiPatch(`/api/jenis-pemeriksaan/${editingJenisItem.id}`, {
-        nama: editingJenisNama.trim(),
-        harga: Number(editingJenisHarga),
-      });
-      setEditJenisModalOpen(false);
+      if (jenisModalMode === 'add') {
+        await apiPost('/api/jenis-pemeriksaan', {
+          nama: editingJenisNama.trim(),
+          harga: Number(editingJenisHarga),
+        });
+      } else if (editingJenisItem) {
+        await apiPatch(`/api/jenis-pemeriksaan/${editingJenisItem.id}`, {
+          nama: editingJenisNama.trim(),
+          harga: Number(editingJenisHarga),
+        });
+      }
+      setJenisModalMode(null);
       await loadMasters();
     } catch (err: unknown) {
       setJenisError(err instanceof Error ? err.message : 'Gagal menyimpan jenis pemeriksaan');
@@ -558,101 +613,6 @@ export function PasienPage() {
       setSavingJenis(false);
     }
   }
-
-  const statusFields = (
-    <>
-      <div className="form-field">
-        <label htmlFor="hasil">Status hasil</label>
-        <select
-          id="hasil"
-          value={hasilStatus}
-          onChange={(e) => setHasilStatus(e.target.value as 'MENUNGGU_HASIL' | 'SELESAI')}
-        >
-          <option value="MENUNGGU_HASIL">Menunggu hasil</option>
-          <option value="SELESAI">Selesai</option>
-        </select>
-      </div>
-      <div className="form-field">
-        <label htmlFor="bayar">Status pembayaran</label>
-        <select
-          id="bayar"
-          value={paymentStatus}
-          onChange={(e) => setPaymentStatus(e.target.value as 'BELUM_LUNAS' | 'LUNAS')}
-        >
-          <option value="BELUM_LUNAS">Belum lunas</option>
-          <option value="LUNAS">Lunas</option>
-        </select>
-      </div>
-    </>
-  );
-
-  const penunjangField = (
-    <div className="form-field form-grid--span-3">
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-          background: 'var(--color-bg-subtle, #f8fafc)',
-          padding: '0.85rem 1rem',
-          borderRadius: '8px',
-          border: '1px solid var(--color-border)',
-        }}
-      >
-        <div>
-          <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--color-text)' }}>
-            Pemeriksaan Tambahan Radiologi
-          </div>
-          <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-            {radTambahan.length === 0
-              ? 'Belum ada pemeriksaan radiologi tambahan yang dipilih.'
-              : `Terpilih ${radTambahan.length} pemeriksaan radiologi tambahan.`}
-          </p>
-        </div>
-        <button
-          type="button"
-          className="btn btn--secondary btn--sm"
-          onClick={() => setPenunjangModalOpen(true)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}
-        >
-          <span>⚡</span> Pemeriksaan Tambahan Radiologi
-        </button>
-      </div>
-
-      {radTambahan.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.65rem' }}>
-          {radTambahan.map((r) => (
-            <span
-              key={`rad-${r}`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                padding: '0.2rem 0.55rem',
-                backgroundColor: '#e0e7ff',
-                color: '#3730a3',
-                borderRadius: '4px',
-                fontSize: '0.78rem',
-                fontWeight: 500,
-              }}
-            >
-              {r}
-              <button
-                type="button"
-                onClick={() => setRadTambahan((prev) => prev.filter((item) => item !== r))}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#3730a3', fontWeight: 'bold', padding: 0 }}
-                title="Hapus"
-              >
-                ✕
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
   const jenisPemeriksaanField = (
     <div className="form-field form-grid--span-3" style={{ marginTop: '0.5rem' }}>
@@ -675,7 +635,7 @@ export function PasienPage() {
               <th style={{ textAlign: 'left', padding: '10px' }}>Jenis Pemeriksaan</th>
               <th style={{ width: '150px', textAlign: 'right', padding: '10px' }}>Harga</th>
               <th style={{ width: '150px', textAlign: 'right', padding: '10px' }}>Sharing</th>
-              <th style={{ width: '90px', textAlign: 'center', padding: '10px' }}>Aksi</th>
+              <th style={{ width: '160px', textAlign: 'center', padding: '10px' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -722,29 +682,51 @@ export function PasienPage() {
                         : `Otomatis (${formatRupiah(Number(computeAutoSharingAmount(selectedDokter?.nama, [j.nama], umurYears, selectedDokter?.defaultSharingAmount || '0')) || 0)})`}
                     </td>
                     <td style={{ textAlign: 'center', padding: '10px' }}>
-                      <button
-                        type="button"
-                        className="btn btn--xs btn--secondary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditJenisModal(j);
-                        }}
-                        style={{
-                          padding: '0.25rem 0.55rem',
-                          fontSize: '0.78rem',
-                          borderRadius: '6px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          border: '1px solid var(--color-border)',
-                          background: '#ffffff',
-                          color: '#0f172a',
-                          fontWeight: 500,
-                        }}
-                        title="Edit jenis pemeriksaan & harga"
-                      >
-                        ✎ Edit
-                      </button>
+                      <div style={{ display: 'inline-flex', gap: '0.35rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn--xs btn--secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditJenisModal(j);
+                          }}
+                          style={{
+                            padding: '0.25rem 0.55rem',
+                            fontSize: '0.78rem',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                            border: '1px solid var(--color-border)',
+                            background: '#ffffff',
+                            color: '#0f172a',
+                            fontWeight: 500,
+                          }}
+                          title="Edit jenis pemeriksaan & harga"
+                        >
+                          ✎ Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--xs btn--primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAddJenisModal();
+                          }}
+                          style={{
+                            padding: '0.25rem 0.55rem',
+                            fontSize: '0.78rem',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                            fontWeight: 600,
+                          }}
+                          title="Tambah jenis pemeriksaan baru"
+                        >
+                          + Tambah
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -796,146 +778,169 @@ export function PasienPage() {
 
   const patientFields = (
     <>
-      <div className="form-field">
-        <label htmlFor="nama">Nama</label>
-        <input id="nama" required value={nama} onChange={(e) => setNama(e.target.value)} />
-      </div>
-      <div className="form-field">
-        <label htmlFor="tgl">Tanggal lahir</label>
-        <input
-          id="tgl"
-          type="date"
-          required
-          min={birthDateInputMin()}
-          max={birthDateInputMax()}
-          value={tanggalLahir}
-          onChange={(e) => setTanggalLahir(e.target.value)}
-          onBlur={(e) => setTanggalLahir(normalizeBirthDateOnBlur(e.target.value))}
-        />
-      </div>
-      <div className="form-field">
-        <span className="form-field__static-label">Umur</span>
-        <p className="form-field__static-value">
-          {umurPreview === null ? '—' : formatUmurTahun(umurPreview)}
-        </p>
-      </div>
-      <div className="form-field">
-        <label htmlFor="telp">No telepon</label>
-        <input id="telp" value={noTelepon} onChange={(e) => setNoTelepon(e.target.value)} />
-      </div>
-      <div className="form-field">
-        <label htmlFor="pengirim">Dokter pengirim</label>
-        <select
-          id="pengirim"
-          required
-          value={pengirimId}
-          onChange={(e) => onPengirimChange(e.target.value, true)}
-        >
-          <option value="">Pilih dokter</option>
-          {dokter.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.nama}
+      <div
+        className="form-grid--span-3"
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.75rem 1.25rem' }}
+      >
+        <div className="form-field">
+          <label htmlFor="nama">Nama</label>
+          <input id="nama" required value={nama} onChange={(e) => setNama(e.target.value)} />
+        </div>
+        <div className="form-field">
+          <label htmlFor="tgl">Tanggal lahir</label>
+          <input
+            id="tgl"
+            type="date"
+            required
+            min={birthDateInputMin()}
+            max={birthDateInputMax()}
+            value={tanggalLahir}
+            onChange={(e) => setTanggalLahir(e.target.value)}
+            onBlur={(e) => setTanggalLahir(normalizeBirthDateOnBlur(e.target.value))}
+          />
+        </div>
+        <div className="form-field">
+          <span className="form-field__static-label">Umur</span>
+          <p className="form-field__static-value">
+            {umurPreview === null ? '—' : formatUmurTahun(umurPreview)}
+          </p>
+        </div>
+        <div className="form-field">
+          <label htmlFor="telp">No telepon</label>
+          <input id="telp" value={noTelepon} onChange={(e) => setNoTelepon(e.target.value)} />
+        </div>
+        <div className="form-field" style={{ gridColumn: '1' }}>
+          <label htmlFor="alamat">Alamat</label>
+          <input id="alamat" value={alamat} onChange={(e) => setAlamat(e.target.value)} />
+        </div>
+        <div className="form-field" style={{ gridColumn: '2' }}>
+          <label htmlFor="sharing-select" style={{ fontWeight: 600, color: '#0369a1' }}>
+            Pilihan Nominal Sharing
+          </label>
+          <select
+            id="sharing-select"
+            value={sharingMode}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSharingMode(val);
+              if (val === 'auto') {
+                setSharingAmount(autoSharingAmount);
+              } else if (val !== 'custom') {
+                setSharingAmount(val);
+              }
+            }}
+            style={{
+              fontWeight: 600,
+              color: '#0284c7',
+              backgroundColor: '#f0f9ff',
+              border: '1px solid #7dd3fc',
+              padding: '0.45rem',
+              borderRadius: '6px',
+            }}
+          >
+            <option value="auto">
+              ⚡ Otomatis ({formatRupiah(Number(autoSharingAmount) || 0)} — Sesuai Rumus Dokter, Umur &amp; Pemeriksaan)
             </option>
-          ))}
-        </select>
+            <option value="18000">Rp 18.000 — Thorax Anak (&lt; 10 th) — dr. Anna Diah</option>
+            <option value="20000">Rp 20.000 — Thorax Dewasa (≥ 10 th) — dr. Anna Diah</option>
+            <option value="33000">Rp 33.000 — Thorax Anak (&lt; 10 th) — dr. Eva / dr. Iman</option>
+            <option value="35000">Rp 35.000 — Thorax Dewasa (≥ 10 th) — dr. Eva / dr. Iman</option>
+            <option value="58000">Rp 58.000 — Shoulder Joint</option>
+            <option value="88000">Rp 88.000 — Lumbosacral</option>
+            <option value="50000">Rp 50.000 — Standar Dokter</option>
+            <option value="0">Rp 0 — Tanpa Sharing</option>
+            <option value="custom">✎ Input Manual / Lainnya...</option>
+          </select>
+        </div>
+        <div className="form-field" style={{ gridColumn: '3' }}>
+          <label htmlFor="sharing">Nominal Sharing (Rp)</label>
+          <input
+            id="sharing"
+            type="number"
+            min="0"
+            step="1"
+            value={sharingAmount}
+            onChange={(e) => {
+              setSharingAmount(e.target.value);
+              setSharingMode('custom');
+            }}
+          />
+        </div>
+        <div className="form-field" style={{ gridColumn: '4' }}>
+          <span className="form-field__static-label">Total Bayar</span>
+          <p className="form-field__static-value">{formatRupiah(estimate.totalHarga)}</p>
+        </div>
       </div>
-      <div className="form-field">
-        <label htmlFor="sharing-select" style={{ fontWeight: 600, color: '#0369a1' }}>
-          Pilihan Nominal Sharing
-        </label>
-        <select
-          id="sharing-select"
-          value={sharingMode}
-          onChange={(e) => {
-            const val = e.target.value;
-            setSharingMode(val);
-            if (val === 'auto') {
-              setSharingAmount(autoSharingAmount);
-            } else if (val !== 'custom') {
-              setSharingAmount(val);
-            }
-          }}
-          style={{
-            fontWeight: 600,
-            color: '#0284c7',
-            backgroundColor: '#f0f9ff',
-            border: '1px solid #7dd3fc',
-            padding: '0.45rem',
-            borderRadius: '6px',
-          }}
-        >
-          <option value="auto">
-            ⚡ Otomatis ({formatRupiah(Number(autoSharingAmount) || 0)} — Sesuai Rumus Dokter, Umur &amp; Pemeriksaan)
-          </option>
-          <option value="18000">Rp 18.000 — Thorax Anak (&lt; 10 th) — dr. Anna Diah</option>
-          <option value="20000">Rp 20.000 — Thorax Dewasa (≥ 10 th) — dr. Anna Diah</option>
-          <option value="33000">Rp 33.000 — Thorax Anak (&lt; 10 th) — dr. Eva / dr. Iman</option>
-          <option value="35000">Rp 35.000 — Thorax Dewasa (≥ 10 th) — dr. Eva / dr. Iman</option>
-          <option value="58000">Rp 58.000 — Shoulder Joint</option>
-          <option value="88000">Rp 88.000 — Lumbosacral</option>
-          <option value="50000">Rp 50.000 — Standar Dokter</option>
-          <option value="0">Rp 0 — Tanpa Sharing</option>
-          <option value="custom">✎ Input Manual / Lainnya...</option>
-        </select>
-      </div>
-      <div className="form-field">
-        <label htmlFor="sharing">Nominal Sharing (Rp)</label>
-        <input
-          id="sharing"
-          type="number"
-          min="0"
-          step="1"
-          value={sharingAmount}
-          onChange={(e) => {
-            setSharingAmount(e.target.value);
-            setSharingMode('custom');
-          }}
-        />
-      </div>
-    </>
-  );
-
-  const alamatRadiologFields = (
-    <>
-      <div className="form-field">
-        <label htmlFor="alamat">Alamat</label>
-        <input id="alamat" value={alamat} onChange={(e) => setAlamat(e.target.value)} />
-      </div>
-      <div className="form-field">
-        <label htmlFor="radiolog">Radiolog</label>
-        <select
-          id="radiolog"
-          value={radiologId}
-          onChange={(e) => setRadiologId(e.target.value)}
-        >
-          <option value="">Pilih radiolog</option>
-          {radiologList.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.nama}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="form-field">
-        <label htmlFor="admin">Admin</label>
-        <select
-          id="admin"
-          value={admin}
-          onChange={(e) => setAdmin(e.target.value)}
-        >
-          <option value="">Pilih admin</option>
-          {staffList.map((s) => (
-            <option key={s.id} value={s.nama}>
-              {s.nama}
-            </option>
-          ))}
-        </select>
+      <div
+        className="form-grid--span-3"
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '0.75rem 1.25rem' }}
+      >
+        <div className="form-field">
+          <label htmlFor="pengirim">Dokter pengirim</label>
+          <select
+            id="pengirim"
+            required
+            value={pengirimId}
+            onChange={(e) => onPengirimChange(e.target.value, true)}
+          >
+            <option value="">Pilih dokter</option>
+            {dokter.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.nama}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label htmlFor="radiolog">Radiolog</label>
+          <select id="radiolog" value={radiologId} onChange={(e) => setRadiologId(e.target.value)}>
+            <option value="">Pilih radiolog</option>
+            {radiologList.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.nama}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label htmlFor="admin">Admin</label>
+          <select id="admin" value={admin} onChange={(e) => setAdmin(e.target.value)}>
+            <option value="">Pilih admin</option>
+            {staffList.map((s) => (
+              <option key={s.id} value={s.nama}>
+                {s.nama}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label htmlFor="hasil">Status hasil</label>
+          <select
+            id="hasil"
+            value={hasilStatus}
+            onChange={(e) => setHasilStatus(e.target.value as 'MENUNGGU_HASIL' | 'SELESAI')}
+          >
+            <option value="MENUNGGU_HASIL">Menunggu hasil</option>
+            <option value="SELESAI">Selesai</option>
+          </select>
+        </div>
+        <div className="form-field">
+          <label htmlFor="bayar">Status pembayaran</label>
+          <select
+            id="bayar"
+            value={paymentStatus}
+            onChange={(e) => setPaymentStatus(e.target.value as 'BELUM_LUNAS' | 'LUNAS')}
+          >
+            <option value="BELUM_LUNAS">Belum lunas</option>
+            <option value="LUNAS">Lunas</option>
+          </select>
+        </div>
       </div>
     </>
   );
 
   const klinisField = (
-    <div className="form-field form-grid--span-3">
+    <div className="form-field" style={{ gridColumn: '1' }}>
       <label htmlFor="klinis">Klinis</label>
       <textarea
         id="klinis"
@@ -948,17 +953,7 @@ export function PasienPage() {
 
   const kesanField = (
     <div className="form-field form-grid--span-2">
-      <div className="form-field__header">
-        <label htmlFor="kesan" style={{ margin: 0 }}>Kesan</label>
-        <button
-          type="button"
-          className="btn btn--xs btn--primary"
-          onClick={() => setExpertiseModalOpen(true)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-        >
-          <span>⚡</span> Expertise
-        </button>
-      </div>
+      <label htmlFor="kesan">Kesan</label>
       <textarea
         id="kesan"
         rows={3}
@@ -1023,6 +1018,14 @@ export function PasienPage() {
               style={timeFilter !== 'today' ? { border: '1px solid var(--color-border)' } : {}}
             >
               📅 Hari Ini
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm btn--ghost"
+              onClick={openBhpModal}
+              style={{ border: '1px solid var(--color-border)' }}
+            >
+              + Tambah BHP
             </button>
             <button
               type="button"
@@ -1134,14 +1137,14 @@ export function PasienPage() {
                   <td>{formatRupiah(p.totalSharing)}</td>
                   <td>
                     <span
-                      className={`badge ${p.hasilStatus === 'SELESAI' ? 'badge--ok' : 'badge--warn'}`}
+                      className={`badge ${p.hasilStatus === 'SELESAI' ? 'badge--ok' : 'badge--pending'}`}
                     >
                       {p.hasilStatus === 'SELESAI' ? 'Selesai' : 'Menunggu'}
                     </span>
                   </td>
                   <td>
                     <span
-                      className={`badge ${p.paymentStatus === 'LUNAS' ? 'badge--ok' : 'badge--muted'}`}
+                      className={`badge ${p.paymentStatus === 'LUNAS' ? 'badge--ok' : 'badge--unpaid'}`}
                     >
                       {p.paymentStatus === 'LUNAS' ? 'Lunas' : 'Belum'}
                     </span>
@@ -1165,26 +1168,156 @@ export function PasienPage() {
 
       <Modal open={addOpen} title="Registrasi Pasien Baru" onClose={() => setAddOpen(false)} size="xl">
         <form onSubmit={(e) => void onSubmitAdd(e)} className="form-grid form-grid--wide">
-          <div className="form-field form-grid--span-3" style={{ background: '#f0f9ff', padding: '1rem', borderRadius: '8px', border: '1px solid #bae6fd', marginBottom: '0.5rem' }}>
-            <label htmlFor="ambil-reg" style={{ color: '#0369a1', fontWeight: 600 }}>Ambil Data dari Pendaftaran Umum (Opsional)</label>
-            <select
-              id="ambil-reg"
-              value={selectedPendaftaranId}
-              onChange={(e) => handlePendaftaranSelect(e.target.value)}
-              style={{ borderColor: '#7dd3fc', backgroundColor: 'white' }}
+          <div
+            className="form-grid--span-3"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.75rem 1.25rem', marginBottom: '0.5rem' }}
+          >
+            <div
+              className="form-field"
+              style={{ gridColumn: '1', gridRow: '1', background: '#f0f9ff', padding: '1rem', borderRadius: '8px', border: '1px solid #bae6fd' }}
             >
-              <option value="">-- Pilih Data Pasien --</option>
-              {pendaftaranList.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.noRegistrasi} - {p.namaPasien} ({p.umur || '-'})
+              <label htmlFor="ambil-reg" style={{ color: '#0369a1', fontWeight: 600 }}>Ambil Data dari Pendaftaran Umum (Opsional)</label>
+              <select
+                id="ambil-reg"
+                value={selectedPendaftaranId}
+                onChange={(e) => handlePendaftaranSelect(e.target.value)}
+                style={{ borderColor: '#7dd3fc', backgroundColor: 'white' }}
+              >
+                <option value="">-- Pilih Data Pasien --</option>
+                {pendaftaranList.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.noRegistrasi} - {p.namaPasien} ({p.umur || '-'})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field" style={{ gridColumn: '4', gridRow: '2' }}>
+              <label htmlFor="tgl">Tanggal lahir *</label>
+              <input
+                id="tgl"
+                type="date"
+                required
+                min={birthDateInputMin()}
+                max={birthDateInputMax()}
+                value={tanggalLahir}
+                onChange={(e) => setTanggalLahir(e.target.value)}
+                onBlur={(e) => setTanggalLahir(normalizeBirthDateOnBlur(e.target.value))}
+              />
+            </div>
+            <div className="form-field" style={{ gridColumn: '4', gridRow: '3' }}>
+              <span className="form-field__static-label">Umur</span>
+              <p className="form-field__static-value">
+                {umurPreview === null ? '—' : formatUmurTahun(umurPreview)}
+              </p>
+            </div>
+            <div className="form-field" style={{ gridColumn: '1', gridRow: '2' }}>
+              <label htmlFor="nama">Nama *</label>
+              <input id="nama" required value={nama} onChange={(e) => setNama(e.target.value)} />
+            </div>
+            <div className="form-field" style={{ gridColumn: '2', gridRow: '2' }}>
+              <label htmlFor="alamat">Alamat</label>
+              <input id="alamat" value={alamat} onChange={(e) => setAlamat(e.target.value)} />
+            </div>
+            <div className="form-field" style={{ gridColumn: '3', gridRow: '2' }}>
+              <label htmlFor="telp">No telepon</label>
+              <input id="telp" value={noTelepon} onChange={(e) => setNoTelepon(e.target.value)} />
+            </div>
+            <div className="form-field" style={{ gridColumn: '1', gridRow: '3' }}>
+              <label htmlFor="pengirim">Dokter pengirim *</label>
+              <select
+                id="pengirim"
+                required
+                value={pengirimId}
+                onChange={(e) => onPengirimChange(e.target.value, true)}
+              >
+                <option value="">Pilih dokter</option>
+                {dokter.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.nama}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field" style={{ gridColumn: '2', gridRow: '3' }}>
+              <label htmlFor="radiolog">Radiolog</label>
+              <select id="radiolog" value={radiologId} onChange={(e) => setRadiologId(e.target.value)}>
+                <option value="">Pilih radiolog</option>
+                {radiologList.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.nama}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field" style={{ gridColumn: '3', gridRow: '3' }}>
+              <label htmlFor="admin">Admin</label>
+              <select id="admin" value={admin} onChange={(e) => setAdmin(e.target.value)}>
+                <option value="">Pilih admin</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.nama}>
+                    {s.nama}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field" style={{ gridColumn: '2 / 5', gridRow: '1' }}>
+              <label htmlFor="klinis">Klinis</label>
+              <textarea
+                id="klinis"
+                rows={2}
+                value={klinis}
+                onChange={(e) => setKlinis(clampClinicalInput(e.target.value))}
+              />
+            </div>
+            <div className="form-field" style={{ gridColumn: '1', gridRow: '4' }}>
+              <label htmlFor="sharing-select">Pilihan Nominal Sharing</label>
+              <select
+                id="sharing-select"
+                value={sharingMode}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSharingMode(val);
+                  if (val === 'auto') {
+                    setSharingAmount(autoSharingAmount);
+                  } else if (val !== 'custom') {
+                    setSharingAmount(val);
+                  }
+                }}
+              >
+                <option value="auto">
+                  ⚡ Otomatis ({formatRupiah(Number(autoSharingAmount) || 0)} — Sesuai Rumus Dokter, Umur &amp; Pemeriksaan)
                 </option>
-              ))}
-            </select>
+                <option value="18000">Rp 18.000 — Thorax Anak (&lt; 10 th) — dr. Anna Diah</option>
+                <option value="20000">Rp 20.000 — Thorax Dewasa (≥ 10 th) — dr. Anna Diah</option>
+                <option value="33000">Rp 33.000 — Thorax Anak (&lt; 10 th) — dr. Eva / dr. Iman</option>
+                <option value="35000">Rp 35.000 — Thorax Dewasa (≥ 10 th) — dr. Eva / dr. Iman</option>
+                <option value="58000">Rp 58.000 — Shoulder Joint</option>
+                <option value="88000">Rp 88.000 — Lumbosacral</option>
+                <option value="50000">Rp 50.000 — Standar Dokter</option>
+                <option value="0">Rp 0 — Tanpa Sharing</option>
+                <option value="custom">✎ Input Manual / Lainnya...</option>
+              </select>
+            </div>
+            <div className="form-field" style={{ gridColumn: '2', gridRow: '4' }}>
+              <label htmlFor="sharing">Nominal Sharing (Rp)</label>
+              <input
+                id="sharing"
+                type="number"
+                min="0"
+                step="1"
+                value={sharingAmount}
+                onChange={(e) => {
+                  setSharingAmount(e.target.value);
+                  setSharingMode('custom');
+                }}
+              />
+            </div>
+            <div className="form-field" style={{ gridColumn: '3', gridRow: '4' }}>
+              <span className="form-field__static-label">Total Bayar</span>
+              <p className="form-field__static-value">{formatRupiah(estimate.totalHarga)}</p>
+            </div>
           </div>
-          {patientFields}
-          {alamatRadiologFields}
-          {klinisField}
-          {penunjangField}
+
           {jenisPemeriksaanField}
           {financePreview}
           <div className="form-grid--span-3">
@@ -1200,19 +1333,21 @@ export function PasienPage() {
       <Modal open={editOpen} title="Ubah Data Pasien" onClose={() => setEditOpen(false)} size="xl">
         <form onSubmit={(e) => void onSubmitEdit(e)} className="form-grid form-grid--wide">
           {patientFields}
-          {alamatRadiologFields}
-          {statusFields}
           {klinisField}
           {kesanField}
-          {financePreview}
-          {penunjangField}
           {jenisPemeriksaanField}
-          <div className="form-grid--span-3">
-            <ModalFormFooter
-              onCancel={() => setEditOpen(false)}
-              submitLabel="Simpan perubahan"
-              loading={saving}
-            />
+          <div
+            className="form-grid--span-3"
+            style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}
+          >
+            {financePreview}
+            <div style={{ marginLeft: 'auto' }}>
+              <ModalFormFooter
+                onCancel={() => setEditOpen(false)}
+                submitLabel="Simpan perubahan"
+                loading={saving}
+              />
+            </div>
           </div>
         </form>
       </Modal>
@@ -1226,29 +1361,14 @@ export function PasienPage() {
         onConfirm={() => void confirmDelete()}
       />
 
-      <ExpertiseModal
-        open={expertiseModalOpen}
-        onClose={() => setExpertiseModalOpen(false)}
-        onSelectTemplate={(isiText) => setKesan((prev) => clampClinicalInput(prev ? prev + '\n\n' + isiText : isiText))}
-        templates={kesanTemplates}
-        onTemplatesChanged={loadMasters}
-      />
-
-      <PemeriksaanPenunjangModal
-        open={penunjangModalOpen}
-        onClose={() => setPenunjangModalOpen(false)}
-        radTambahan={radTambahan}
-        labTambahan={labTambahan}
-        onChange={(newRad, newLab) => {
-          setRadTambahan(newRad);
-          setLabTambahan(newLab);
-        }}
-      />
-
       <Modal
-        open={editJenisModalOpen}
-        title="Ubah Jenis Pemeriksaan, Harga & Sharing"
-        onClose={() => setEditJenisModalOpen(false)}
+        open={jenisModalMode !== null}
+        title={
+          jenisModalMode === 'add'
+            ? 'Tambah Jenis Pemeriksaan, Harga & Sharing'
+            : 'Ubah Jenis Pemeriksaan, Harga & Sharing'
+        }
+        onClose={() => setJenisModalMode(null)}
         size="md"
       >
         <form onSubmit={(e) => void onSubmitEditJenis(e)} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.25rem 0' }}>
@@ -1302,9 +1422,141 @@ export function PasienPage() {
             </div>
           </div>
           <ModalFormFooter
-            onCancel={() => setEditJenisModalOpen(false)}
-            submitLabel="Simpan perubahan"
+            onCancel={() => setJenisModalMode(null)}
+            submitLabel={jenisModalMode === 'add' ? 'Tambah' : 'Simpan perubahan'}
             loading={savingJenis}
+          />
+        </form>
+      </Modal>
+
+      <Modal open={bhpModalOpen} title="Tambah Data BHP Radiologi" onClose={() => setBhpModalOpen(false)}>
+        <form onSubmit={(e) => void handleBhpSubmit(e)} className="form-grid">
+          {bhpError ? (
+            <div className="alert alert--error form-field--full">{bhpError}</div>
+          ) : null}
+          <div className="form-field form-field--full">
+            <label htmlFor="bhp-quick-pemakaian">Pemakaian *</label>
+            <input
+              id="bhp-quick-pemakaian"
+              required
+              placeholder="Contoh: Pemakaian BHP Rontgen Thorax"
+              value={bhpForm.pemakaian}
+              onChange={(e) => setBhpForm((f) => ({ ...f, pemakaian: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-tanggal">Tanggal *</label>
+            <input
+              id="bhp-quick-tanggal"
+              type="date"
+              required
+              value={bhpForm.tanggal}
+              onChange={(e) => setBhpForm((f) => ({ ...f, tanggal: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-harga">Harga (Rp)</label>
+            <input
+              id="bhp-quick-harga"
+              type="number"
+              min="0"
+              step="1"
+              value={bhpForm.harga}
+              onChange={(e) => setBhpForm((f) => ({ ...f, harga: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-dev">Dev (Rp)</label>
+            <input
+              id="bhp-quick-dev"
+              type="number"
+              min="0"
+              step="1"
+              value={bhpForm.dev}
+              onChange={(e) => setBhpForm((f) => ({ ...f, dev: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-fixer">Fixer (Rp)</label>
+            <input
+              id="bhp-quick-fixer"
+              type="number"
+              min="0"
+              step="1"
+              value={bhpForm.fixer}
+              onChange={(e) => setBhpForm((f) => ({ ...f, fixer: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-film">Film Setiap Pemeriksaan (Rp)</label>
+            <input
+              id="bhp-quick-film"
+              type="number"
+              min="0"
+              step="1"
+              value={bhpForm.film}
+              onChange={(e) => setBhpForm((f) => ({ ...f, film: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-amplop-kertas">Amplop Kertas (Rp)</label>
+            <input
+              id="bhp-quick-amplop-kertas"
+              type="number"
+              min="0"
+              step="1"
+              value={bhpForm.amplopKertas}
+              onChange={(e) => setBhpForm((f) => ({ ...f, amplopKertas: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-listrik">Listrik (Rp)</label>
+            <input
+              id="bhp-quick-listrik"
+              type="number"
+              min="0"
+              step="1"
+              value={bhpForm.listrik}
+              onChange={(e) => setBhpForm((f) => ({ ...f, listrik: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-gaji-karyawan">Gaji Karyawan (Rp)</label>
+            <input
+              id="bhp-quick-gaji-karyawan"
+              type="number"
+              min="0"
+              step="1"
+              value={bhpForm.gajiKaryawan}
+              onChange={(e) => setBhpForm((f) => ({ ...f, gajiKaryawan: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-kertas-cetak">Kertas Cetak (Rp)</label>
+            <input
+              id="bhp-quick-kertas-cetak"
+              type="number"
+              min="0"
+              step="1"
+              value={bhpForm.kertasCetak}
+              onChange={(e) => setBhpForm((f) => ({ ...f, kertasCetak: e.target.value }))}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="bhp-quick-amplop">Amplop (Rp)</label>
+            <input
+              id="bhp-quick-amplop"
+              type="number"
+              min="0"
+              step="1"
+              value={bhpForm.amplop}
+              onChange={(e) => setBhpForm((f) => ({ ...f, amplop: e.target.value }))}
+            />
+          </div>
+          <ModalFormFooter
+            onCancel={() => setBhpModalOpen(false)}
+            submitLabel="Simpan"
+            loading={savingBhp}
           />
         </form>
       </Modal>

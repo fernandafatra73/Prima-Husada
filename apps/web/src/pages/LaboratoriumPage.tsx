@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PDFViewer } from '@react-pdf/renderer';
 import { ListPageShell } from '../components/ui/ListPageShell.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
@@ -7,7 +7,7 @@ import { useListQueryParams, useListSearch } from '../hooks/useListQueryParams.t
 import { useMutationReload } from '../hooks/useMutationReload.ts';
 import { usePaginatedList } from '../hooks/usePaginatedList.ts';
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../lib/api.ts';
-import { formatUmurTahun } from '../lib/format.ts';
+import { computeUmurYears, formatRupiah, formatUmurTahun } from '../lib/format.ts';
 import type { PaginatedResponse } from '../lib/pagination.ts';
 import { LabReportDocument, type LabReportData } from '../pdf/LabReportDocument.tsx';
 import { loadLogoDataUrl } from '../pdf/loadLogoDataUrl.ts';
@@ -25,7 +25,7 @@ import {
   type LabTableRow,
   type ParsedLabData,
 } from '../lib/labKesan.ts';
-import { formatKlinisDisplay, serializeKlinisData } from '../lib/penunjang.ts';
+import { serializeKlinisData } from '../lib/penunjang.ts';
 import '../components/ui/ui.css';
 
 export {
@@ -101,6 +101,7 @@ interface PaketLabData {
   readonly id: string;
   readonly nama: string;
   readonly urutan: number;
+  readonly harga?: string;
   readonly items: readonly PaketLabItemData[];
 }
 
@@ -119,7 +120,42 @@ function formatDateDisplay(dateStr: string): string {
 
 export function LaboratoriumPage() {
   const { search, setSearch } = useListSearch();
-  const queryParams = useListQueryParams({}, search);
+  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'custom'>('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+
+  const dateParams = useMemo(() => {
+    if (timeFilter === 'all') return {};
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    if (timeFilter === 'today') {
+      return { startDate: todayStr, endDate: todayStr };
+    }
+    if (timeFilter === 'week') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 7);
+      const sy = start.getFullYear();
+      const sm = String(start.getMonth() + 1).padStart(2, '0');
+      const sd = String(start.getDate()).padStart(2, '0');
+      return { startDate: `${sy}-${sm}-${sd}`, endDate: todayStr };
+    }
+    if (timeFilter === 'custom') {
+      return {
+        ...(customStart ? { startDate: customStart } : {}),
+        ...(customEnd ? { endDate: customEnd } : {}),
+      };
+    }
+    return {};
+  }, [timeFilter, customStart, customEnd]);
+
+  const queryParams = useListQueryParams(
+    { modul: 'LABORATORIUM', ...(dateParams as Record<string, string>) },
+    search,
+  );
   const { items, pagination, setPage, loading, error, setError, reload: reloadList } =
     usePaginatedList<LabPasienItem>('/api/pasien', queryParams);
   const reload = useMutationReload(reloadList);
@@ -132,6 +168,7 @@ export function LaboratoriumPage() {
   const [analisNama, setAnalisNama] = useState('');
   const [hasilStatus, setHasilStatus] = useState<'MENUNGGU_HASIL' | 'SELESAI'>('MENUNGGU_HASIL');
   const [paymentStatus, setPaymentStatus] = useState<'BELUM_LUNAS' | 'LUNAS'>('BELUM_LUNAS');
+  const [editPaketIds, setEditPaketIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [logoSrc, setLogoSrc] = useState('');
@@ -166,6 +203,22 @@ export function LaboratoriumPage() {
   const [paketError, setPaketError] = useState<string | null>(null);
   const [deletePaketTarget, setDeletePaketTarget] = useState<PaketLabData | null>(null);
   const [deletePaketLoading, setDeletePaketLoading] = useState(false);
+
+  const regTotalHarga = useMemo(
+    () =>
+      paketList
+        .filter((p) => regPaketIds.includes(p.id))
+        .reduce((sum, p) => sum + Number(p.harga ?? 0), 0),
+    [paketList, regPaketIds],
+  );
+
+  const editTotalHarga = useMemo(
+    () =>
+      paketList
+        .filter((p) => editPaketIds.includes(p.id))
+        .reduce((sum, p) => sum + Number(p.harga ?? 0), 0),
+    [paketList, editPaketIds],
+  );
 
   const loadAnalis = useCallback(async () => {
     try {
@@ -218,6 +271,7 @@ export function LaboratoriumPage() {
     setAnalisNama(parsed.analisNama || '');
     setHasilStatus(item.hasilStatus);
     setPaymentStatus(item.paymentStatus);
+    setEditPaketIds(item.pemeriksaan.map((x) => x.jenisPemeriksaanId));
   }
 
   function handleRowChange(index: number, field: keyof LabTableRow, value: string) {
@@ -270,6 +324,7 @@ export function LaboratoriumPage() {
         kesan: serialized,
         hasilStatus,
         paymentStatus,
+        jenisPemeriksaanIds: editPaketIds.length > 0 ? editPaketIds : undefined,
       });
       setSelected(null);
       await reload();
@@ -362,6 +417,7 @@ export function LaboratoriumPage() {
         jenisPemeriksaanIds: regPaketIds.length > 0 ? regPaketIds : undefined,
         sharingAmount: Number(regSharingAmount),
         admin: regAdmin || undefined,
+        asalModul: 'LABORATORIUM',
       });
 
       if (regLabRows.length > 0) {
@@ -508,6 +564,61 @@ export function LaboratoriumPage() {
       searchValue={search}
       onSearchChange={setSearch}
       onRefresh={() => void reload()}
+      filterExtra={
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`btn btn--sm ${timeFilter === 'today' ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => { setTimeFilter(timeFilter === 'today' ? 'all' : 'today'); setPage(1); }}
+            style={timeFilter !== 'today' ? { border: '1px solid var(--color-border)' } : {}}
+          >
+            📅 Pasien Hari Ini
+          </button>
+          <button
+            type="button"
+            className={`btn btn--sm ${timeFilter === 'week' ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => { setTimeFilter(timeFilter === 'week' ? 'all' : 'week'); setPage(1); }}
+            style={timeFilter !== 'week' ? { border: '1px solid var(--color-border)' } : {}}
+          >
+            🗓️ Pasien Minggu Ini
+          </button>
+          <button
+            type="button"
+            className={`btn btn--sm ${timeFilter === 'custom' ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => setTimeFilter(timeFilter === 'custom' ? 'all' : 'custom')}
+            style={timeFilter !== 'custom' ? { border: '1px solid var(--color-border)' } : {}}
+          >
+            🔧 Custom
+          </button>
+          <button
+            type="button"
+            className={`btn btn--sm ${timeFilter === 'all' ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => { setTimeFilter('all'); setPage(1); }}
+            style={timeFilter !== 'all' ? { border: '1px solid var(--color-border)' } : {}}
+          >
+            Lihat Semua
+          </button>
+          {timeFilter === 'custom' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => { setCustomStart(e.target.value); setPage(1); }}
+                style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)' }}
+                aria-label="Tanggal mulai"
+              />
+              <span>–</span>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={(e) => { setCustomEnd(e.target.value); setPage(1); }}
+                style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)' }}
+                aria-label="Tanggal akhir"
+              />
+            </div>
+          )}
+        </div>
+      }
       error={error}
       loading={loading}
       pagination={pagination}
@@ -658,7 +769,7 @@ export function LaboratoriumPage() {
                 </td>
                 <td>
                   <span
-                    className={`badge badge--${item.hasilStatus === 'SELESAI' ? 'green' : 'yellow'}`}
+                    className={`badge ${item.hasilStatus === 'SELESAI' ? 'badge--ok' : 'badge--pending'}`}
                   >
                     {item.hasilStatus === 'SELESAI' ? 'SELESAI' : 'MENUNGGU HASIL'}
                   </span>
@@ -699,11 +810,6 @@ export function LaboratoriumPage() {
           {/* Top section: Form full-width */}
           <form onSubmit={(e) => void handleSave(e)}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem 1.25rem', marginBottom: '1rem' }}>
-              <div className="form-field" style={{ gridColumn: '1 / -1' }}>
-                <label>Klinis Pasien</label>
-                <input type="text" value={formatKlinisDisplay(selected.klinis) || '—'} disabled />
-              </div>
-
               {/* Interactive Table for Lab Tests (full width) */}
               <div className="form-field" style={{ gridColumn: '1 / -1' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -865,45 +971,104 @@ export function LaboratoriumPage() {
                 </div>
               </div>
 
-              {/* Selector Analis */}
-              <div className="form-field" style={{ gridColumn: '1 / -1' }}>
-                <label htmlFor="lab-analis-pemeriksa">Analis Pemeriksa</label>
-                <select
-                  id="lab-analis-pemeriksa"
-                  value={analisId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setAnalisId(id);
-                    const found = analisList.find((a) => a.id === id);
-                    if (found) setAnalisNama(found.nama);
-                    else setAnalisNama('');
+              {/* Paket Pemeriksaan Lab (bisa diubah) */}
+              <div
+                className="form-field"
+                style={{
+                  gridColumn: '1 / -1',
+                  padding: '0.75rem',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-card)',
+                }}
+              >
+                <label style={{ fontWeight: 600, marginBottom: '0.5rem', display: 'block' }}>
+                  Pilih Jenis Pemeriksaan Lab (Paket)
+                </label>
+                <div className="checkbox-list" style={{ flexDirection: 'row', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto' }}>
+                  {paketList.map((p) => (
+                    <label key={p.id} style={{ minWidth: '220px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={editPaketIds.includes(p.id)}
+                          onChange={() => {
+                            setEditPaketIds((prev) =>
+                              prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id],
+                            );
+                          }}
+                        />
+                        {p.nama}
+                      </span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                        {formatRupiah(p.harga ?? '0')}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginTop: '0.75rem',
+                    paddingTop: '0.6rem',
+                    borderTop: '1px dashed var(--color-border)',
+                    fontWeight: 700,
                   }}
                 >
-                  <option value="">Pilih analis laboratorium...</option>
-                  {analisList.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.nama} {a.nip ? `(NIP: ${a.nip})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  <span>Total Harga Pemeriksaan</span>
+                  <span style={{ color: 'var(--color-primary)' }}>{formatRupiah(editTotalHarga)}</span>
+                </div>
               </div>
 
-              <div className="form-field">
-                <label htmlFor="lab-hasil-status">Status Hasil</label>
-                <select id="lab-hasil-status" value={hasilStatus}
-                  onChange={(e) => setHasilStatus(e.target.value as 'MENUNGGU_HASIL' | 'SELESAI')}>
-                  <option value="MENUNGGU_HASIL">MENUNGGU HASIL</option>
-                  <option value="SELESAI">SELESAI</option>
-                </select>
-              </div>
+              {/* Analis Pemeriksa, Status Hasil & Status Pembayaran sejajar */}
+              <div
+                style={{
+                  gridColumn: '1 / -1',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 1fr',
+                  gap: '0.75rem 1.25rem',
+                }}
+              >
+                <div className="form-field">
+                  <label htmlFor="lab-analis-pemeriksa">Analis Pemeriksa</label>
+                  <select
+                    id="lab-analis-pemeriksa"
+                    value={analisId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setAnalisId(id);
+                      const found = analisList.find((a) => a.id === id);
+                      if (found) setAnalisNama(found.nama);
+                      else setAnalisNama('');
+                    }}
+                  >
+                    <option value="">Pilih analis laboratorium...</option>
+                    {analisList.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.nama} {a.nip ? `(NIP: ${a.nip})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="form-field">
-                <label htmlFor="lab-payment-status">Status Pembayaran</label>
-                <select id="lab-payment-status" value={paymentStatus}
-                  onChange={(e) => setPaymentStatus(e.target.value as 'BELUM_LUNAS' | 'LUNAS')}>
-                  <option value="BELUM_LUNAS">BELUM LUNAS</option>
-                  <option value="LUNAS">LUNAS</option>
-                </select>
+                <div className="form-field">
+                  <label htmlFor="lab-hasil-status">Status Hasil</label>
+                  <select id="lab-hasil-status" value={hasilStatus}
+                    onChange={(e) => setHasilStatus(e.target.value as 'MENUNGGU_HASIL' | 'SELESAI')}>
+                    <option value="MENUNGGU_HASIL">MENUNGGU HASIL</option>
+                    <option value="SELESAI">SELESAI</option>
+                  </select>
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="lab-payment-status">Status Pembayaran</label>
+                  <select id="lab-payment-status" value={paymentStatus}
+                    onChange={(e) => setPaymentStatus(e.target.value as 'BELUM_LUNAS' | 'LUNAS')}>
+                    <option value="BELUM_LUNAS">BELUM LUNAS</option>
+                    <option value="LUNAS">LUNAS</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -1160,6 +1325,13 @@ export function LaboratoriumPage() {
             </div>
 
             <div className="form-field">
+              <span className="form-field__static-label">Umur</span>
+              <p className="form-field__static-value">
+                {regTanggalLahir ? formatUmurTahun(computeUmurYears(regTanggalLahir) ?? 0) : '—'}
+              </p>
+            </div>
+
+            <div className="form-field">
               <label htmlFor="rTelp">No. Telepon</label>
               <input id="rTelp" value={regNoTelepon} onChange={(e) => setRegNoTelepon(e.target.value)} />
             </div>
@@ -1179,31 +1351,62 @@ export function LaboratoriumPage() {
               </select>
             </div>
 
-            <div className="form-field form-field--full">
+            <div className="form-field">
               <label htmlFor="rAlamat">Alamat Lengkap</label>
-              <textarea id="rAlamat" rows={2} value={regAlamat} onChange={(e) => setRegAlamat(e.target.value)} />
+              <textarea
+                id="rAlamat"
+                rows={1}
+                style={{ minHeight: 0 }}
+                value={regAlamat}
+                onChange={(e) => setRegAlamat(e.target.value)}
+              />
             </div>
 
-            <div className="form-field form-field--full">
+            <div className="form-field">
               <label htmlFor="rKlinis">Klinis (Keterangan)</label>
-              <textarea id="rKlinis" rows={2} value={regKlinis} onChange={(e) => setRegKlinis(e.target.value)} />
+              <textarea
+                id="rKlinis"
+                rows={1}
+                style={{ minHeight: 0 }}
+                value={regKlinis}
+                onChange={(e) => setRegKlinis(e.target.value)}
+              />
             </div>
 
             <div className="form-field form-field--full" style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-card)' }}>
               <label style={{ fontWeight: 600, marginBottom: '0.5rem', display: 'block' }}>2. Pilih Jenis Pemeriksaan Lab (Paket) *</label>
               <div className="checkbox-list" style={{ flexDirection: 'row', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto' }}>
                 {paketList.map((p) => (
-                  <label key={p.id} style={{ minWidth: '180px' }}>
-                    <input
-                      type="checkbox"
-                      checked={regPaketIds.includes(p.id)}
-                      onChange={() => {
-                        setRegPaketIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]);
-                      }}
-                    />
-                    {p.nama}
+                  <label key={p.id} style={{ minWidth: '220px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={regPaketIds.includes(p.id)}
+                        onChange={() => {
+                          setRegPaketIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]);
+                        }}
+                      />
+                      {p.nama}
+                    </span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                      {formatRupiah(p.harga ?? '0')}
+                    </span>
                   </label>
                 ))}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '0.75rem',
+                  paddingTop: '0.6rem',
+                  borderTop: '1px dashed var(--color-border)',
+                  fontWeight: 700,
+                }}
+              >
+                <span>Total Harga Pemeriksaan</span>
+                <span style={{ color: 'var(--color-primary)' }}>{formatRupiah(regTotalHarga)}</span>
               </div>
             </div>
 

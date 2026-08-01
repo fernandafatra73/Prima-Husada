@@ -141,6 +141,16 @@ export function IconLogout({ className }: IconProps) {
   );
 }
 
+export function IconMusic({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M9 18V5l11-2v13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="17" cy="16" r="3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 export function IconBell({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>

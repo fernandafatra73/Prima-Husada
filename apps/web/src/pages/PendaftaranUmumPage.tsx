@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { PDFViewer } from '@react-pdf/renderer';
 import { ConfirmModal } from '../components/ui/ConfirmModal.tsx';
 import { ListPageShell } from '../components/ui/ListPageShell.tsx';
@@ -41,7 +41,39 @@ function formatWhatsAppNumber(phone: string | null): string | null {
 
 export function PendaftaranUmumPage() {
   const { search, setSearch } = useListSearch();
-  const queryParams = useListQueryParams({}, search);
+  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'custom'>('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+
+  const dateParams = useMemo(() => {
+    if (timeFilter === 'all') return {};
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    if (timeFilter === 'today') {
+      return { startDate: todayStr, endDate: todayStr };
+    }
+    if (timeFilter === 'week') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 7);
+      const sy = start.getFullYear();
+      const sm = String(start.getMonth() + 1).padStart(2, '0');
+      const sd = String(start.getDate()).padStart(2, '0');
+      return { startDate: `${sy}-${sm}-${sd}`, endDate: todayStr };
+    }
+    if (timeFilter === 'custom') {
+      return {
+        ...(customStart ? { startDate: customStart } : {}),
+        ...(customEnd ? { endDate: customEnd } : {}),
+      };
+    }
+    return {};
+  }, [timeFilter, customStart, customEnd]);
+
+  const queryParams = useListQueryParams({ ...(dateParams as Record<string, string>) }, search);
   const { items, pagination, setPage, loading, error, setError, reload: reloadList } =
     usePaginatedList<PendaftaranUmumItem>('/api/pendaftaran-umum', queryParams);
   const reload = useMutationReload(reloadList);
@@ -191,6 +223,61 @@ export function PendaftaranUmumPage() {
       searchValue={search}
       onSearchChange={setSearch}
       onRefresh={() => void reload()}
+      filterExtra={
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`btn btn--sm ${timeFilter === 'today' ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => { setTimeFilter(timeFilter === 'today' ? 'all' : 'today'); setPage(1); }}
+            style={timeFilter !== 'today' ? { border: '1px solid var(--color-border)' } : {}}
+          >
+            📅 Pasien Hari Ini
+          </button>
+          <button
+            type="button"
+            className={`btn btn--sm ${timeFilter === 'week' ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => { setTimeFilter(timeFilter === 'week' ? 'all' : 'week'); setPage(1); }}
+            style={timeFilter !== 'week' ? { border: '1px solid var(--color-border)' } : {}}
+          >
+            🗓️ Pasien Per Minggu
+          </button>
+          <button
+            type="button"
+            className={`btn btn--sm ${timeFilter === 'custom' ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => setTimeFilter(timeFilter === 'custom' ? 'all' : 'custom')}
+            style={timeFilter !== 'custom' ? { border: '1px solid var(--color-border)' } : {}}
+          >
+            🔧 Custom
+          </button>
+          <button
+            type="button"
+            className={`btn btn--sm ${timeFilter === 'all' ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => { setTimeFilter('all'); setPage(1); }}
+            style={timeFilter !== 'all' ? { border: '1px solid var(--color-border)' } : {}}
+          >
+            Lihat Semua
+          </button>
+          {timeFilter === 'custom' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => { setCustomStart(e.target.value); setPage(1); }}
+                style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)' }}
+                aria-label="Tanggal mulai"
+              />
+              <span>–</span>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={(e) => { setCustomEnd(e.target.value); setPage(1); }}
+                style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--color-border)' }}
+                aria-label="Tanggal akhir"
+              />
+            </div>
+          )}
+        </div>
+      }
       error={error}
       loading={loading}
       pagination={pagination}
@@ -251,7 +338,7 @@ export function PendaftaranUmumPage() {
                             alignItems: 'center',
                             gap: '5px',
                             backgroundColor: '#e0f2fe',
-                            color: '#0284c7',
+                            color: '#16a34a',
                             border: '1px solid #7dd3fc',
                             padding: '3px 10px',
                             borderRadius: '6px',

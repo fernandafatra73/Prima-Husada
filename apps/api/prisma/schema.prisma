@@ -27,6 +27,11 @@ enum SharingType {
   FIXED
 }
 
+enum AsalModul {
+  RADIOLOGI
+  LABORATORIUM
+}
+
 model Dokter {
   id                    String   @id @default(cuid())
   nama                  String
@@ -54,6 +59,176 @@ model PetugasLab {
   noTelepon String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Radiografer {
+  id        String   @id @default(cuid())
+  nama      String
+  noHp      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PetugasKasir {
+  id        String   @id @default(cuid())
+  nama      String
+  noHp      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HitunganLed {
+  id           String   @id @default(cuid())
+  namaPasien   String
+  jenisKelamin String
+  jamPertama   Decimal
+  jamKedua     Decimal
+  tanggal      DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model KondisiAlat {
+  id          String   @id @default(cuid())
+  namaPasien  String
+  kv          Decimal
+  sekon       Decimal
+  mAs         Decimal
+  beratBadan  Decimal?
+  tanggal     DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model GajiKaryawan {
+  id           String   @id @default(cuid())
+  namaKaryawan String
+  jabatan      String?
+  bulan        String
+  tanggal      DateTime @default(now())
+  gajiPokok    Decimal  @default(0)
+  tunjangan    Decimal  @default(0)
+  potongan     Decimal  @default(0)
+  gajiBersih   Decimal  @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Karyawan {
+  id         String   @id @default(cuid())
+  nama       String
+  jabatan    String?
+  noTelepon  String?
+  alamat     String?
+  departemen String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model BhpRadiologi {
+  id           String   @id @default(cuid())
+  tanggal      DateTime @default(now())
+  pemakaian    String
+  harga        Decimal  @default(0)
+  dev          Decimal  @default(0)
+  fixer        Decimal  @default(0)
+  film         Decimal  @default(0)
+  amplopKertas Decimal  @default(0)
+  listrik      Decimal  @default(0)
+  gajiKaryawan Decimal  @default(0)
+  kertasCetak  Decimal  @default(0)
+  amplop       Decimal  @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model LaporanPajakOverride {
+  id              String   @id @default(cuid())
+  year            Int
+  bulan           Int
+  modul           AsalModul @default(RADIOLOGI)
+  jumlahPasien    Int
+  harga           Decimal
+  totalPenerimaan Decimal
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([year, bulan, modul])
+}
+
+model LaporanNeraca {
+  id                 String   @id @default(cuid())
+  year               Int      @unique
+  namaPerusahaan     String   @default("CV. PRIMA MANDIRI NUSANTARA")
+
+  // Aktiva Lancar
+  kas                Decimal  @default(0)
+  bank               Decimal  @default(0)
+  piutang            Decimal  @default(0)
+  persediaan         Decimal  @default(0)
+
+  // Aktiva Tetap
+  tanah              Decimal  @default(0)
+  gedung             Decimal  @default(0)
+  peralatan          Decimal  @default(0)
+  kendaraan          Decimal  @default(0)
+
+  // Pasiva - Utang Jangka Pendek
+  utangUsaha         Decimal  @default(0)
+  utangPajak         Decimal  @default(0)
+  utangLainnya       Decimal  @default(0)
+
+  // Pasiva - Utang Jangka Panjang
+  utangJangkaPanjang Decimal  @default(0)
+
+  // Pasiva - Modal
+  modalUsaha         Decimal  @default(0)
+
+  // Laporan Rugi Laba
+  pendapatan         Decimal  @default(0)
+  biayaGaji          Decimal  @default(0)
+  biayaAtkBahan      Decimal  @default(0)
+  biayaListrik       Decimal  @default(0)
+  biayaTelpon        Decimal  @default(0)
+  biayaTransport     Decimal  @default(0)
+  biayaSewa          Decimal  @default(0)
+  biayaLainLain      Decimal  @default(0)
+
+  // Tanda tangan
+  tempatTandaTangan  String   @default("Sukabumi")
+  tanggalTandaTangan DateTime @default(now())
+  namaPenandatangan  String   @default("")
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+/// Pengaturan kop surat (logo, nama klinik, alamat, telepon) dipakai bersama
+/// oleh template surat (Surat Keterangan Sehat, Surat Keterangan Rujukan).
+/// Singleton: selalu diakses/diubah lewat baris id = "default".
+model KopSurat {
+  id          String   @id @default("default")
+  namaKlinik  String   @default("KLINIK PRIMA HUSADA")
+  alamat      String   @default("Jl. Siliwangi Ruko Palapa No 2 Parung Kuda")
+  telepon     String   @default("0857-1932-5557")
+  logoDataUrl String?
+  updatedAt   DateTime @updatedAt
+}
+
+/// Arsip foto rontgen pasien beserta kesan/diagnosa yang diisi manual oleh
+/// radiolog/dokter (BUKAN deteksi otomatis AI — lihat catatan produk).
+model AnalisaFotoRontgen {
+  id               String   @id @default(cuid())
+  namaPasien       String
+  regCode          String?
+  jenisPemeriksaan String?
+  tanggal          DateTime @default(now())
+  fotoDataUrl      String
+  kesan            String?
+  diagnosa         String?
+  radiologNama     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model JenisPemeriksaan {
@@ -103,6 +278,7 @@ model Pasien {
   alamat          String?
   pengirimId      String
   pengirim        Dokter        @relation(fields: [pengirimId], references: [id])
+  asalModul       AsalModul     @default(RADIOLOGI)
   klinis          String?
   hasilStatus     HasilStatus   @default(MENUNGGU_HASIL)
   paymentStatus   PaymentStatus @default(BELUM_LUNAS)
@@ -117,8 +293,44 @@ model Pasien {
   radiologId      String?
   radiolog        Radiolog?     @relation("PasienRadiolog", fields: [radiologId], references: [id])
   pemeriksaan     PasienPemeriksaan[]
+  paketLab        PasienPaketLab[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+}
+
+/// Salinan arsip Pasien: disinkron setiap kali Pasien dibuat/diubah, dan TIDAK
+/// terhubung lewat foreign key sehingga tetap ada walau data Pasien aslinya dihapus.
+model PasienDuplikat {
+  id              String        @id @default(cuid())
+  sourcePasienId  String        @unique
+  regCode         String
+  nama            String
+  tanggalLahir    DateTime
+  noTelepon       String?
+  alamat          String?
+  pengirimNama    String
+  radiologNama    String?
+  asalModul       AsalModul     @default(RADIOLOGI)
+  klinis          String?
+  kesan           String?
+  hasilStatus     HasilStatus   @default(MENUNGGU_HASIL)
+  paymentStatus   PaymentStatus @default(BELUM_LUNAS)
+  pemeriksaanNama String        @default("")
+  totalHarga      Decimal       @default(0)
+  registeredAt    DateTime
+  archivedAt      DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Transfer {
+  id             String   @id @default(cuid())
+  namaBank       String
+  noRekening     String
+  jumlah         Decimal
+  namaTransferan String
+  tanggal        DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model PasienPemeriksaan {
@@ -133,13 +345,29 @@ model PasienPemeriksaan {
 }
 
 model PaketLab {
-  id        String         @id @default(cuid())
-  nama      String         @unique
-  harga     Decimal        @default(0)
-  urutan    Int            @default(0)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id        String           @id @default(cuid())
+  nama      String           @unique
+  harga     Decimal          @default(0)
+  urutan    Int              @default(0)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
   items     PaketLabItem[]
+  pasien    PasienPaketLab[]
+}
+
+/// Paket Lab yang dipilih untuk seorang Pasien (asalModul LABORATORIUM).
+/// Terpisah dari PasienPemeriksaan karena PaketLab tidak berelasi dengan
+/// JenisPemeriksaan (harga & masternya berbeda dari Jenis Pemeriksaan Radiologi).
+model PasienPaketLab {
+  id            String   @id @default(cuid())
+  pasienId      String
+  pasien        Pasien   @relation(fields: [pasienId], references: [id], onDelete: Cascade)
+  paketLabId    String
+  paketLab      PaketLab @relation(fields: [paketLabId], references: [id])
+  hargaSnapshot Decimal
+  createdAt     DateTime @default(now())
+
+  @@unique([pasienId, paketLabId])
 }
 
 model PaketLabItem {

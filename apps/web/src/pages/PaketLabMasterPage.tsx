@@ -22,7 +22,7 @@ export interface PaketLabData {
 }
 
 const STANDARD_PACKAGES = [
-  'Pemeriksaan hematologi',
+  'Hematologi',
   'Kimia darah',
   'Diabetes',
   'Urinalisa',

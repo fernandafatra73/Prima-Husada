@@ -16,7 +16,7 @@ interface AppShellProps {
 export function AppShell({ activeView, authUser, onNavigate, onLogout, children }: AppShellProps) {
   return (
     <div className="app-shell">
-      <Sidebar activeId={activeView} onNavigate={onNavigate} />
+      <Sidebar activeId={activeView} onNavigate={onNavigate} role={authUser.role} />
       <div className="app-main">
         <Header activeView={activeView} authUser={authUser} onLogout={onLogout} />
         <main className="app-content">{children}</main>

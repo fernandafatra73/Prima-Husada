@@ -30,6 +30,7 @@ export interface SharingReportData {
   readonly adminFeeFormatted: string;
   readonly netSharingFormatted: string;
   readonly catatan: string;
+  readonly adminNama: string;
 }
 
 const BLUE = '#2b4c9b';
@@ -308,7 +309,9 @@ export function SharingReportDocument({ data }: { readonly data: SharingReportDa
             <View style={{ flex: 1 }} />
             <View style={styles.signatureBox}>
               <Text style={styles.signatureTitle}>Petugas Admin Klinik</Text>
-              <Text style={styles.signatureName}>( Petugas Admin Klinik )</Text>
+              <Text style={styles.signatureName}>
+                {data.adminNama ? data.adminNama : '( Petugas Admin Klinik )'}
+              </Text>
             </View>
           </View>
         </View>

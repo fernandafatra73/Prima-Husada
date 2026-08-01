@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ConfirmModal } from '../components/ui/ConfirmModal.tsx';
 import { ListPageShell } from '../components/ui/ListPageShell.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
 import { ModalFormFooter } from '../components/ui/ModalFormFooter.tsx';
 import { TableRowActions } from '../components/ui/TableRowActions.tsx';
+import { CetakALModal, type CetakALPasien } from '../components/CetakALModal.tsx';
 import { ExpertiseModal } from '../components/ExpertiseModal.tsx';
 import { useListQueryParams, useListSearch } from '../hooks/useListQueryParams.ts';
 import { useMutationReload } from '../hooks/useMutationReload.ts';
 import { usePaginatedList } from '../hooks/usePaginatedList.ts';
-import { apiGet, apiPatch } from '../lib/api.ts';
+import { apiDelete, apiGet, apiPatch } from '../lib/api.ts';
 import { clampClinicalInput } from '../lib/clinicalText.ts';
 import type { PaginatedResponse } from '../lib/pagination.ts';
 import { printPasienReport } from '../lib/pasienPrint.ts';
@@ -17,6 +19,7 @@ import '../components/ui/ui.css';
 
 interface AntreanItem {
   readonly id: string;
+  readonly sourcePasienId: string;
   readonly regCode: string;
   readonly nama: string;
   readonly tanggalLahir: string;
@@ -24,9 +27,9 @@ interface AntreanItem {
   readonly noTelepon: string | null;
   readonly alamat: string | null;
   readonly klinis: string | null;
-  readonly pengirim: { readonly id: string; readonly nama: string };
-  readonly radiolog: { readonly id: string; readonly nama: string } | null;
-  readonly pemeriksaan: readonly { readonly id: string; readonly nama: string; readonly harga: string }[];
+  readonly pengirimNama: string;
+  readonly radiologNama: string | null;
+  readonly pemeriksaanNama: string;
   readonly kesan: string | null;
   readonly hasilStatus: 'MENUNGGU_HASIL' | 'SELESAI';
   readonly paymentStatus: 'BELUM_LUNAS' | 'LUNAS';
@@ -38,6 +41,11 @@ interface KesanTemplateItem {
   readonly id: string;
   readonly judul: string;
   readonly isi: string;
+}
+
+interface RadiologItem {
+  readonly id: string;
+  readonly nama: string;
 }
 
 const DEFAULT_KESAN_TEMPLATES: readonly KesanTemplateItem[] = [
@@ -109,11 +117,24 @@ function RadiologTarifSummary({
   );
 }
 
+function combinedPemeriksaan(item: AntreanItem): string {
+  const parsed = parseKlinisData(item.klinis);
+  const list = [
+    ...(item.pemeriksaanNama ? item.pemeriksaanNama.split(', ').filter(Boolean) : []),
+    ...parsed.radTambahan.map((r) => `+Rad: ${r}`),
+    ...parsed.labTambahan.map((l) => `+Lab: ${l}`),
+  ];
+  return list.join(', ') || '—';
+}
+
 export function RadiologWorkPage() {
   const { search, setSearch } = useListSearch();
-  const queryParams = useListQueryParams({}, search);
+  const queryParams = useListQueryParams(
+    { modul: 'RADIOLOGI', hasilStatus: 'MENUNGGU_HASIL' },
+    search,
+  );
   const { items, pagination, setPage, loading, error, setError, reload: reloadList } =
-    usePaginatedList<AntreanItem>('/api/radiolog/antrean', queryParams);
+    usePaginatedList<AntreanItem>('/api/pasien-duplikat', queryParams);
   const reload = useMutationReload(reloadList);
   const [selected, setSelected] = useState<AntreanItem | null>(null);
   const [kesan, setKesan] = useState('');
@@ -121,8 +142,13 @@ export function RadiologWorkPage() {
   const [expertiseModalOpen, setExpertiseModalOpen] = useState(false);
   const [hasilStatus, setHasilStatus] = useState<'MENUNGGU_HASIL' | 'SELESAI'>('MENUNGGU_HASIL');
   const [paymentStatus, setPaymentStatus] = useState<'BELUM_LUNAS' | 'LUNAS'>('BELUM_LUNAS');
+  const [radiologList, setRadiologList] = useState<RadiologItem[]>([]);
+  const [radiologId, setRadiologId] = useState('');
   const [saving, setSaving] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [labelItem, setLabelItem] = useState<AntreanItem | null>(null);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -137,11 +163,26 @@ export function RadiologWorkPage() {
     void loadTemplates();
   }, [loadTemplates]);
 
-  function openEdit(item: AntreanItem) {
+  useEffect(() => {
+    apiGet<PaginatedResponse<RadiologItem>>('/api/radiolog?page=1&limit=200')
+      .then((res) => setRadiologList(res.items))
+      .catch(() => setRadiologList([]));
+  }, []);
+
+  async function openEdit(item: AntreanItem) {
     setSelected(item);
     setKesan(item.kesan ?? '');
     setHasilStatus(item.hasilStatus);
     setPaymentStatus(item.paymentStatus);
+    setRadiologId('');
+    try {
+      const detail = await apiGet<{ item: { radiolog: { id: string } | null } }>(
+        `/api/pasien/${item.sourcePasienId}`,
+      );
+      setRadiologId(detail.item.radiolog?.id ?? '');
+    } catch {
+      setRadiologId('');
+    }
   }
 
   async function simpanHasil() {
@@ -149,10 +190,11 @@ export function RadiologWorkPage() {
     setSaving(true);
     setError(null);
     try {
-      await apiPatch(`/api/pasien/${selected.id}`, {
+      await apiPatch(`/api/pasien/${selected.sourcePasienId}`, {
         kesan,
         hasilStatus,
         paymentStatus,
+        radiologId: radiologId || undefined,
       });
       setSelected(null);
       setKesan('');
@@ -173,6 +215,36 @@ export function RadiologWorkPage() {
       setError(err instanceof Error ? err.message : 'Gagal membuat PDF');
     } finally {
       setPrintingId(null);
+    }
+  }
+
+  function toCetakALPasien(item: AntreanItem): CetakALPasien {
+    return {
+      id: item.sourcePasienId,
+      regCode: item.regCode,
+      nama: item.nama,
+      umur: item.umur,
+      tanggalLahir: item.tanggalLahir,
+      createdAt: item.createdAt,
+      pengirim: { nama: item.pengirimNama },
+      radiolog: item.radiologNama ? { nama: item.radiologNama } : null,
+      pemeriksaan: item.pemeriksaanNama
+        ? item.pemeriksaanNama.split(', ').filter(Boolean).map((nama) => ({ nama }))
+        : [],
+    };
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleting(true);
+    setError(null);
+    try {
+      await apiDelete('/api/pasien/bulk-radiolog-antrean');
+      setBulkDeleteOpen(false);
+      await reload();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal menghapus semua data');
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
@@ -203,6 +275,17 @@ export function RadiologWorkPage() {
         loading={loading}
         pagination={pagination}
         onPageChange={setPage}
+        action={
+          items.length > 0 ? (
+            <button
+              type="button"
+              className="btn btn--danger"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              🗑️ Hapus Semua
+            </button>
+          ) : undefined
+        }
       >
         <table className="data-table">
           <thead>
@@ -212,7 +295,6 @@ export function RadiologWorkPage() {
               <th>Umur / JK</th>
               <th>Pengirim</th>
               <th>Pemeriksaan</th>
-              <th>Klinis</th>
               <th>Hasil</th>
               <th>Bayar</th>
               <th>Aksi</th>
@@ -221,7 +303,7 @@ export function RadiologWorkPage() {
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={9}>Tidak ada antrean pasien.</td>
+                <td colSpan={8}>Tidak ada antrean pasien.</td>
               </tr>
             ) : (
               items.map((p) => (
@@ -239,28 +321,35 @@ export function RadiologWorkPage() {
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {p.umur} thn
                   </td>
-                  <td>{p.pengirim.nama}</td>
-                  <td>{p.pemeriksaan.map((x) => x.nama).join(', ')}</td>
-                  <td style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.klinis ?? '—'}
-                  </td>
+                  <td>{p.pengirimNama}</td>
+                  <td>{combinedPemeriksaan(p)}</td>
                   <td>
-                    <span className={`badge ${p.hasilStatus === 'SELESAI' ? 'badge--ok' : 'badge--warn'}`}>
+                    <span className={`badge ${p.hasilStatus === 'SELESAI' ? 'badge--ok' : 'badge--pending'}`}>
                       {p.hasilStatus === 'SELESAI' ? 'Selesai' : 'Menunggu'}
                     </span>
                   </td>
                   <td>
-                    <span className={`badge ${p.paymentStatus === 'LUNAS' ? 'badge--ok' : 'badge--muted'}`}>
+                    <span className={`badge ${p.paymentStatus === 'LUNAS' ? 'badge--ok' : 'badge--unpaid'}`}>
                       {p.paymentStatus === 'LUNAS' ? 'Lunas' : 'Belum'}
                     </span>
                   </td>
                   <td>
-                    <TableRowActions
-                      onPrint={() => void handlePrint(p.id)}
-                      onEdit={() => openEdit(p)}
-                      editLabel="Ubah kesan dan status"
-                      printLabel={printingId === p.id ? 'Membuat PDF…' : 'Cetak hasil radiologi'}
-                    />
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <TableRowActions
+                        onPrint={() => void handlePrint(p.sourcePasienId)}
+                        onEdit={() => void openEdit(p)}
+                        editLabel="Ubah kesan dan status"
+                        printLabel={printingId === p.sourcePasienId ? 'Membuat PDF…' : 'Cetak hasil radiologi'}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setLabelItem(p)}
+                        title="Cetak label"
+                      >
+                        🏷️ Cetak Label
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -295,20 +384,10 @@ export function RadiologWorkPage() {
               <div><span style={{ color: 'var(--color-text-muted)' }}>Umur</span><br /><strong>{selected.umur} tahun</strong></div>
               <div><span style={{ color: 'var(--color-text-muted)' }}>Alamat</span><br /><strong>{selected.alamat ?? '—'}</strong></div>
               <div><span style={{ color: 'var(--color-text-muted)' }}>No. Telepon</span><br /><strong>{selected.noTelepon ?? '—'}</strong></div>
-              <div><span style={{ color: 'var(--color-text-muted)' }}>Pengirim</span><br /><strong>{selected.pengirim.nama}</strong></div>
+              <div><span style={{ color: 'var(--color-text-muted)' }}>Pengirim</span><br /><strong>{selected.pengirimNama}</strong></div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)' }}>Pemeriksaan</span><br />
-                <strong>
-                  {(() => {
-                    const parsed = parseKlinisData(selected.klinis);
-                    const list = [
-                      ...selected.pemeriksaan.map((x) => x.nama),
-                      ...parsed.radTambahan.map((r) => `+Rad: ${r}`),
-                      ...parsed.labTambahan.map((l) => `+Lab: ${l}`),
-                    ];
-                    return list.join(', ') || '—';
-                  })()}
-                </strong>
+                <strong>{combinedPemeriksaan(selected)}</strong>
               </div>
               {selected.klinis && (
                 <div style={{ gridColumn: '1 / -1' }}>
@@ -333,6 +412,21 @@ export function RadiologWorkPage() {
                 >
                   <option value="MENUNGGU_HASIL">Menunggu hasil</option>
                   <option value="SELESAI">Selesai</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label htmlFor="radiolog-r">Radiolog</label>
+                <select
+                  id="radiolog-r"
+                  value={radiologId}
+                  onChange={(e) => setRadiologId(e.target.value)}
+                >
+                  <option value="">-- Pilih Radiolog --</option>
+                  {radiologList.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nama}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="form-field">
@@ -382,6 +476,22 @@ export function RadiologWorkPage() {
         onSelectTemplate={(isiText) => setKesan((prev) => clampClinicalInput(prev ? prev + '\n\n' + isiText : isiText))}
         templates={kesanTemplates}
         onTemplatesChanged={loadTemplates}
+      />
+
+      <ConfirmModal
+        open={bulkDeleteOpen}
+        title="Hapus Semua Data Pekerjaan Radiolog"
+        message={`Yakin hapus SEMUA ${pagination.total} data pasien di antrean Pekerjaan Radiolog ini? Termasuk yang masih menunggu hasil. Data tetap tersimpan di arsip Duplikat Radiologi. Tindakan ini tidak bisa dibatalkan.`}
+        loading={bulkDeleting}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={() => void handleBulkDelete()}
+      />
+
+      <CetakALModal
+        open={labelItem !== null}
+        onClose={() => setLabelItem(null)}
+        pasien={labelItem ? toCetakALPasien(labelItem) : null}
+        initialMode="label"
       />
     </>
   );

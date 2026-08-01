@@ -9,6 +9,10 @@ interface HeaderProps {
   readonly onLogout: () => void;
 }
 
+function getRoleLabel(role: AuthUser['role']): string {
+  return role === 'ADMIN' ? 'Manajemen' : 'Pekerja';
+}
+
 function getInitials(name: string): string {
   return name
     .split(' ')
@@ -25,7 +29,7 @@ export function Header({ activeView, authUser, onLogout }: HeaderProps) {
   return (
     <header className="app-header">
       <div className="app-header__left">
-        <span className="app-header__brand">Radiologi Prima</span>
+        <span className="app-header__brand">Klinik Prima Husada</span>
         <span className="app-header__brand" aria-hidden>
           /
         </span>
@@ -40,7 +44,7 @@ export function Header({ activeView, authUser, onLogout }: HeaderProps) {
         <div className="app-header__user">
           <div className="app-header__user-text">
             <p className="app-header__user-name">{authUser.nama}</p>
-            <p className="app-header__user-role">{authUser.role}</p>
+            <p className="app-header__user-role">{getRoleLabel(authUser.role)}</p>
           </div>
           <div className="app-header__avatar" aria-hidden>
             {initials}

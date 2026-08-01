@@ -59,6 +59,11 @@ export function DashboardPage() {
     <>
       <div className="page-heading">
         <h2 className="page-heading__title">Dashboard</h2>
+        <div className="dashboard-marquee" aria-hidden="true">
+          <span className="dashboard-marquee__text">
+            Klinik Prima Husada — Jl. Siliwangi Ruko Palapa No 2 Parung Kuda. Telp 0857-1932-5557
+          </span>
+        </div>
       </div>
 
       {error && <p className="alert alert--error">{error}</p>}

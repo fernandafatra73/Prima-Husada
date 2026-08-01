@@ -2,10 +2,12 @@ import { useState, type JSX } from 'react';
 import logoLabprima from '@src/image/logo-labprima.png';
 import {
   DASHBOARD_NAV_ID,
+  isViewAllowedForRole,
   MAIN_NAV_CATEGORIES,
   type AppViewId,
   type NavCategory,
   type NavItem,
+  type StaffRole,
 } from '../../config/navigation.ts';
 import {
   IconClipboard,
@@ -13,19 +15,23 @@ import {
   IconDashboard,
   IconDocument,
   IconLogout,
+  IconMusic,
   IconSettings,
   IconShield,
   IconStethoscope,
   IconTag,
+  IconUsers,
 } from '../icons/NavIcons.tsx';
 import './layout.css';
 
 interface SidebarProps {
   readonly activeId: AppViewId;
   readonly onNavigate: (id: AppViewId) => void;
+  readonly role: StaffRole;
 }
 
 const CATEGORY_ICONS: Record<string, (props: { className?: string }) => JSX.Element> = {
+  templet: IconDocument,
   pendaftaran: IconClipboard,
   radiologi: IconStethoscope,
   keuangan: IconCurrency,
@@ -43,8 +49,9 @@ function ChevronIcon({ className }: { readonly className?: string }) {
   );
 }
 
-export function Sidebar({ activeId, onNavigate }: SidebarProps) {
+export function Sidebar({ activeId, onNavigate, role }: SidebarProps) {
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() => ({
+    templet: true,
     pendaftaran: true,
     radiologi: true,
     keuangan: true,
@@ -65,9 +72,9 @@ export function Sidebar({ activeId, onNavigate }: SidebarProps) {
     <aside className="app-sidebar" aria-label="Navigasi utama">
       <div className="app-sidebar__brand">
         <div className="app-sidebar__logo">
-          <img src={logoLabprima} alt="Radiologi Prima" className="app-sidebar__logo-img" />
+          <img src={logoLabprima} alt="Klinik Prima Husada" className="app-sidebar__logo-img" />
         </div>
-        <h1 className="app-sidebar__title">Radiologi Prima</h1>
+        <h1 className="app-sidebar__title">Klinik Prima Husada</h1>
       </div>
 
       <nav className="app-sidebar__nav">
@@ -84,8 +91,13 @@ export function Sidebar({ activeId, onNavigate }: SidebarProps) {
           </li>
 
           {MAIN_NAV_CATEGORIES.map((cat: NavCategory) => {
+            const visibleItems = cat.items.filter((item) =>
+              isViewAllowedForRole(item.id as AppViewId, role),
+            );
+            if (visibleItems.length === 0) return null;
+
             const CatIcon = CATEGORY_ICONS[cat.id] ?? IconClipboard;
-            const hasActiveChild = cat.items.some((item) => item.id === activeId);
+            const hasActiveChild = visibleItems.some((item) => item.id === activeId);
             const isExpanded = openCategories[cat.id] ?? hasActiveChild;
 
             return (
@@ -106,7 +118,7 @@ export function Sidebar({ activeId, onNavigate }: SidebarProps) {
 
                 {isExpanded && (
                   <ul className="app-sidebar__child-list">
-                    {cat.items.map((item: NavItem) => {
+                    {visibleItems.map((item: NavItem) => {
                       const isActive = activeId === item.id;
                       if (item.isPlaceholder) {
                         return (
@@ -135,6 +147,28 @@ export function Sidebar({ activeId, onNavigate }: SidebarProps) {
               </li>
             );
           })}
+
+          <li>
+            <button
+              type="button"
+              className={`app-sidebar__link${activeId === 'fatra' ? ' app-sidebar__link--active' : ''}`}
+              onClick={() => onNavigate('fatra')}
+            >
+              <IconUsers className="app-sidebar__icon" />
+              <span className="app-sidebar__label">Fatra</span>
+            </button>
+          </li>
+
+          <li>
+            <button
+              type="button"
+              className={`app-sidebar__link${activeId === 'musik-ph' ? ' app-sidebar__link--active' : ''}`}
+              onClick={() => onNavigate('musik-ph')}
+            >
+              <IconMusic className="app-sidebar__icon" />
+              <span className="app-sidebar__label">Musik-PH</span>
+            </button>
+          </li>
         </ul>
       </nav>
 

@@ -79,6 +79,7 @@ export function SharingPage() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [catatan, setCatatan] = useState('');
+  const [adminNama, setAdminNama] = useState('');
   const [adminFee, setAdminFee] = useState<number>(0);
   const [notesSaved, setNotesSaved] = useState(false);
   const [printingPdf, setPrintingPdf] = useState(false);
@@ -125,6 +126,16 @@ export function SharingPage() {
   useEffect(() => {
     void loadDokterList();
   }, [loadDokterList]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('sharing_admin_nama');
+    if (saved) setAdminNama(saved);
+  }, []);
+
+  const handleAdminNamaChange = (value: string) => {
+    setAdminNama(value);
+    localStorage.setItem('sharing_admin_nama', value);
+  };
 
   // Load saved notes for doctor
   useEffect(() => {
@@ -183,6 +194,7 @@ export function SharingPage() {
       adminFeeFormatted: formatRupiah(adminFee),
       netSharingFormatted: formatRupiah(Math.max(0, totalSharingSum - adminFee)),
       catatan,
+      adminNama,
     };
   };
 
@@ -352,16 +364,6 @@ export function SharingPage() {
         >
           <button
             type="button"
-            className="btn btn--ghost"
-            onClick={() => void handlePreviewPdf()}
-            disabled={previewingPdf || printingPdf}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-          >
-            <span>👁️</span>
-            {previewingPdf ? 'Memuat Pratinjau...' : 'Preview PDF Sharing'}
-          </button>
-          <button
-            type="button"
             className="btn btn--primary"
             onClick={() => void handlePrintPdf()}
             disabled={printingPdf || previewingPdf}
@@ -369,6 +371,16 @@ export function SharingPage() {
           >
             <span>🖨️</span>
             {printingPdf ? 'Membuat PDF...' : 'Cetak PDF Sharing'}
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => void handlePreviewPdf()}
+            disabled={previewingPdf || printingPdf}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <span>👁️</span>
+            {previewingPdf ? 'Memuat Pratinjau...' : 'Preview PDF Sharing'}
           </button>
         </div>
       </div>
@@ -457,6 +469,16 @@ export function SharingPage() {
             <strong style={{ fontSize: '1.05rem', color: 'var(--color-primary)' }}>
               {formatRupiah(totalSharingSum)}
             </strong>
+          </div>
+          <div className="sharing-summary-row">
+            <span>Nama Admin:</span>
+            <input
+              type="text"
+              className="sharing-admin-nama-input"
+              value={adminNama}
+              placeholder="Nama petugas admin"
+              onChange={(e) => handleAdminNamaChange(e.target.value)}
+            />
           </div>
           <div className="sharing-summary-row">
             <span>Admin (Potongan/Biaya):</span>

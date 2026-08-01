@@ -62,7 +62,7 @@ export function PetugasLabPage() {
       setCreateOpen(false);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal membuat petugas lab');
+      setError(err instanceof Error ? err.message : 'Gagal membuat analis');
     } finally {
       setSubmitting(false);
     }
@@ -82,7 +82,7 @@ export function PetugasLabPage() {
       setEditing(null);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal mengubah petugas lab');
+      setError(err instanceof Error ? err.message : 'Gagal mengubah analis');
     } finally {
       setSubmitting(false);
     }
@@ -97,7 +97,7 @@ export function PetugasLabPage() {
       setDeleting(null);
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal menghapus petugas lab');
+      setError(err instanceof Error ? err.message : 'Gagal menghapus analis');
     } finally {
       setSubmitting(false);
     }
@@ -105,10 +105,10 @@ export function PetugasLabPage() {
 
   return (
     <ListPageShell
-      title="Manajemen Petugas Laboratorium"
+      title="Manajemen Analis Laboratorium"
       metrics={[
         {
-          label: 'Total Petugas Lab',
+          label: 'Total Analis',
           value: String(pagination.total),
           tone: 'blue',
           iconKind: 'users',
@@ -124,7 +124,7 @@ export function PetugasLabPage() {
       onPageChange={setPage}
       action={
         <button type="button" className="btn btn--primary" onClick={openCreate}>
-          + Tambah Petugas Lab
+          + Tambah Analis
         </button>
       }
     >
@@ -132,7 +132,7 @@ export function PetugasLabPage() {
         <thead>
           <tr>
             <th>No</th>
-            <th>Nama Petugas Lab</th>
+            <th>Nama Analis</th>
             <th>NIP / SIP</th>
             <th>No. Telepon</th>
             <th>Aksi</th>
@@ -142,7 +142,7 @@ export function PetugasLabPage() {
           {items.length === 0 ? (
             <tr>
               <td colSpan={5} style={{ textAlign: 'center', padding: '2rem' }}>
-                Belum ada data petugas laboratorium.
+                Belum ada data analis laboratorium.
               </td>
             </tr>
           ) : (
@@ -158,8 +158,8 @@ export function PetugasLabPage() {
                   <TableRowActions
                     onEdit={() => openEdit(item)}
                     onDelete={() => setDeleting(item)}
-                    editLabel="Ubah petugas lab"
-                    deleteLabel="Hapus petugas lab"
+                    editLabel="Ubah analis"
+                    deleteLabel="Hapus analis"
                   />
                 </td>
               </tr>
@@ -169,10 +169,10 @@ export function PetugasLabPage() {
       </table>
 
       {createOpen && (
-        <Modal open={true} title="Tambah Petugas Laboratorium" onClose={() => setCreateOpen(false)}>
+        <Modal open={true} title="Tambah Analis Laboratorium" onClose={() => setCreateOpen(false)}>
           <form onSubmit={(e) => void handleCreate(e)} className="form-grid">
             <div className="form-field form-field--full">
-              <label htmlFor="petugas-nama">Nama Petugas Lab *</label>
+              <label htmlFor="petugas-nama">Nama Analis *</label>
               <input
                 id="petugas-nama"
                 type="text"
@@ -215,10 +215,10 @@ export function PetugasLabPage() {
       )}
 
       {editing && (
-        <Modal open={true} title="Ubah Petugas Laboratorium" onClose={() => setEditing(null)}>
+        <Modal open={true} title="Ubah Analis Laboratorium" onClose={() => setEditing(null)}>
           <form onSubmit={(e) => void handleUpdate(e)} className="form-grid">
             <div className="form-field form-field--full">
-              <label htmlFor="edit-petugas-nama">Nama Petugas Lab *</label>
+              <label htmlFor="edit-petugas-nama">Nama Analis *</label>
               <input
                 id="edit-petugas-nama"
                 type="text"
@@ -260,8 +260,8 @@ export function PetugasLabPage() {
       {deleting && (
         <ConfirmModal
           open={true}
-          title="Hapus Petugas Laboratorium"
-          message={`Apakah Anda yakin ingin menghapus petugas lab "${deleting.nama}"?`}
+          title="Hapus Analis Laboratorium"
+          message={`Apakah Anda yakin ingin menghapus analis "${deleting.nama}"?`}
           confirmLabel="Hapus"
           onConfirm={() => void handleDeleteConfirm()}
           onClose={() => setDeleting(null)}

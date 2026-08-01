@@ -15,6 +15,22 @@ export interface LabTestRow {
   readonly isHeader?: boolean;
 }
 
+function renderHasil(result: string) {
+  const value = result || '-';
+  const asteriskCount = value.length - value.replace(/\*+$/, '').length;
+  if (asteriskCount === 0) {
+    return value;
+  }
+  const base = value.slice(0, value.length - asteriskCount);
+  const asterisks = value.slice(value.length - asteriskCount);
+  return (
+    <>
+      {base}
+      <Text style={{ color: RED }}>{asterisks}</Text>
+    </>
+  );
+}
+
 export interface LabReportData {
   readonly logoSrc: string;
   readonly regCode: string;
@@ -30,6 +46,7 @@ export interface LabReportData {
 
 const BLUE = '#2b4c9b';
 const BLACK = '#1a1a1a';
+const RED = '#dc2626';
 
 const styles = StyleSheet.create({
   page: {
@@ -370,8 +387,8 @@ export function LabReportDocument({ data }: { readonly data: LabReportData }) {
                   rightValue={data.tanggalPemeriksaan}
                 />
                 <PatientRow
-                  leftLabel="Pemeriksaan"
-                  leftValue="Pemeriksaan Laboratorium"
+                  leftLabel="Dokter Pengirim"
+                  leftValue={data.dokterNama}
                   rightLabel="No."
                   rightValue={data.regCode}
                   last={true}
@@ -400,7 +417,7 @@ export function LabReportDocument({ data }: { readonly data: LabReportData }) {
                   ) : (
                     <View key={`${pageIdx}-${i}`} style={styles.trRow}>
                       <Text style={styles.tdName}>{truncatePdfCell(row.name, 35)}</Text>
-                      <Text style={styles.tdResult}>{row.result || '-'}</Text>
+                      <Text style={styles.tdResult}>{renderHasil(row.result)}</Text>
                       <Text style={styles.tdRef}>{row.reference || '-'}</Text>
                     </View>
                   ),
