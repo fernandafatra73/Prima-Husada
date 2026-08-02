@@ -33,6 +33,7 @@ interface ArsipPasienItem {
   readonly pemeriksaanNama: string;
   readonly paymentStatus: 'BELUM_LUNAS' | 'LUNAS';
   readonly totalHarga: string;
+  readonly totalSharing: string;
   readonly createdAt: string;
 }
 
@@ -117,6 +118,7 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
     pengirimNama: '',
     pemeriksaanNama: '',
     totalHarga: '0',
+    totalSharing: '0',
     paymentStatus: 'BELUM_LUNAS' as 'BELUM_LUNAS' | 'LUNAS',
   });
   const [savingEdit, setSavingEdit] = useState(false);
@@ -128,6 +130,7 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
       pengirimNama: item.pengirimNama,
       pemeriksaanNama: item.pemeriksaanNama,
       totalHarga: item.totalHarga,
+      totalSharing: item.totalSharing,
       paymentStatus: item.paymentStatus,
     });
     setError(null);
@@ -146,6 +149,7 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
         pengirimNama: editForm.pengirimNama,
         pemeriksaanNama: editForm.pemeriksaanNama,
         totalHarga: Number(editForm.totalHarga) || 0,
+        totalSharing: Number(editForm.totalSharing) || 0,
         paymentStatus: editForm.paymentStatus,
       });
       setEditing(null);
@@ -177,6 +181,11 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
     [items],
   );
 
+  const totalSharing = useMemo(
+    () => items.reduce((sum, item) => sum + (Number(item.totalSharing) || 0), 0),
+    [items],
+  );
+
   const [printingPdf, setPrintingPdf] = useState(false);
   const [previewingPdf, setPreviewingPdf] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -200,11 +209,10 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
     const pdfItems = items.map((p, idx) => ({
       no: (pagination.page - 1) * pagination.limit + idx + 1,
       nama: p.nama,
-      regCode: p.regCode,
       tanggal: formatDateShort(p.createdAt),
       alamat: p.alamat || '—',
       pemeriksaan: p.pemeriksaanNama || '—',
-      totalHargaFormatted: formatRupiah(p.totalHarga),
+      totalSharingFormatted: formatRupiah(p.totalSharing),
     }));
 
     return {
@@ -215,7 +223,7 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
       tanggalCetak: todayStr,
       items: pdfItems,
       totalPasien: pagination.total,
-      totalPendapatanFormatted: formatRupiah(totalPendapatan),
+      totalSharingFormatted: formatRupiah(totalSharing),
       adminNama: '',
     };
   }
@@ -279,6 +287,12 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
             label: 'Total pendapatan',
             value: formatRupiah(totalPendapatan),
             tone: 'violet',
+            iconKind: 'percent',
+          },
+          {
+            label: 'Total sharing',
+            value: formatRupiah(totalSharing),
+            tone: 'amber',
             iconKind: 'percent',
           },
         ]}
@@ -445,6 +459,7 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
               <th>Dokter Pengirim</th>
               <th>Pemeriksaan</th>
               <th style={{ textAlign: 'right' }}>Total Harga</th>
+              <th style={{ textAlign: 'right' }}>Total Sharing</th>
               <th style={{ width: '110px', textAlign: 'center' }}>Bayar</th>
               <th style={{ width: '70px' }}>Aksi</th>
             </tr>
@@ -453,7 +468,7 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
             {items.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   style={{
                     textAlign: 'center',
                     padding: '2.5rem',
@@ -503,6 +518,15 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
                     >
                       {formatRupiah(p.totalHarga)}
                     </td>
+                    <td
+                      style={{
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        color: '#b45309',
+                      }}
+                    >
+                      {formatRupiah(p.totalSharing)}
+                    </td>
                     <td style={{ textAlign: 'center' }}>
                       <span
                         style={{
@@ -544,6 +568,15 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
                   }}
                 >
                   {formatRupiah(totalPendapatan)}
+                </td>
+                <td
+                  style={{
+                    textAlign: 'right',
+                    fontWeight: 700,
+                    color: '#b45309',
+                  }}
+                >
+                  {formatRupiah(totalSharing)}
                 </td>
                 <td />
                 <td />
@@ -605,6 +638,18 @@ export function SharingArsipPage({ modul }: SharingArsipPageProps) {
                 required
                 value={editForm.totalHarga}
                 onChange={(e) => setEditForm((f) => ({ ...f, totalHarga: e.target.value }))}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="sharing-edit-sharing">Total Sharing (Rp) *</label>
+              <input
+                id="sharing-edit-sharing"
+                type="number"
+                min="0"
+                step="1"
+                required
+                value={editForm.totalSharing}
+                onChange={(e) => setEditForm((f) => ({ ...f, totalSharing: e.target.value }))}
               />
             </div>
             <div className="form-field">

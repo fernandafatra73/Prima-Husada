@@ -17,6 +17,18 @@ export function dokterListWhere(q?: string): Prisma.DokterWhereInput {
   };
 }
 
+export function karyawanKlinikListWhere(q?: string): Prisma.KaryawanKlinikWhereInput {
+  const term = searchTerm(q);
+  if (!term) return {};
+  return {
+    OR: [
+      { nama: { contains: term } },
+      { spesialisasi: { contains: term } },
+      { noTelepon: { contains: term } },
+    ],
+  };
+}
+
 export function radiologListWhere(q?: string): Prisma.RadiologWhereInput {
   const term = searchTerm(q);
   if (!term) return {};
@@ -58,6 +70,63 @@ export function petugasKasirListWhere(q?: string): Prisma.PetugasKasirWhereInput
     OR: [
       { nama: { contains: term } },
       { noHp: { contains: term } },
+    ],
+  };
+}
+
+export function petugasAdminKlinikListWhere(q?: string): Prisma.PetugasAdminKlinikWhereInput {
+  const term = searchTerm(q);
+  if (!term) return {};
+  return {
+    OR: [
+      { nama: { contains: term } },
+      { noHp: { contains: term } },
+    ],
+  };
+}
+
+export function tandaTanganElektronikListWhere(q?: string): Prisma.TandaTanganElektronikWhereInput {
+  const term = searchTerm(q);
+  if (!term) return {};
+  return {
+    OR: [
+      { nama: { contains: term } },
+      { alamat: { contains: term } },
+    ],
+  };
+}
+
+export function suratKeteranganSehatListWhere(q?: string): Prisma.SuratKeteranganSehatWhereInput {
+  const term = searchTerm(q);
+  if (!term) return {};
+  return {
+    OR: [
+      { namaPasien: { contains: term } },
+      { nomorSurat: { contains: term } },
+    ],
+  };
+}
+
+export function suratKeteranganRujukanListWhere(q?: string): Prisma.SuratKeteranganRujukanWhereInput {
+  const term = searchTerm(q);
+  if (!term) return {};
+  return {
+    OR: [
+      { namaPasien: { contains: term } },
+      { nomorSurat: { contains: term } },
+    ],
+  };
+}
+
+export function daftarTelponListWhere(q?: string): Prisma.DaftarTelponWhereInput {
+  const term = searchTerm(q);
+  if (!term) return {};
+  return {
+    OR: [
+      { nama: { contains: term } },
+      { telpon: { contains: term } },
+      { namaInstansi: { contains: term } },
+      { noKontrak: { contains: term } },
     ],
   };
 }

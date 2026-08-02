@@ -15,6 +15,8 @@ interface Dokter {
   readonly nama: string;
   readonly spesialisasi: string | null;
   readonly noTelepon: string | null;
+  readonly namaBank: string | null;
+  readonly noRekening: string | null;
 }
 
 export function DokterPage() {
@@ -31,11 +33,15 @@ export function DokterPage() {
   const [nama, setNama] = useState('');
   const [spesialisasi, setSpesialisasi] = useState('');
   const [noTelepon, setNoTelepon] = useState('');
+  const [namaBank, setNamaBank] = useState('');
+  const [noRekening, setNoRekening] = useState('');
 
   function resetForm() {
     setNama('');
     setSpesialisasi('');
     setNoTelepon('');
+    setNamaBank('');
+    setNoRekening('');
     setEditingId(null);
   }
 
@@ -49,6 +55,8 @@ export function DokterPage() {
     setNama(d.nama);
     setSpesialisasi(d.spesialisasi ?? '');
     setNoTelepon(d.noTelepon ?? '');
+    setNamaBank(d.namaBank ?? '');
+    setNoRekening(d.noRekening ?? '');
     setModalMode('edit');
   }
 
@@ -56,7 +64,7 @@ export function DokterPage() {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const body = { nama, spesialisasi, noTelepon };
+    const body = { nama, spesialisasi, noTelepon, namaBank, noRekening };
     try {
       if (modalMode === 'add') {
         await apiPost('/api/dokter', body);
@@ -102,6 +110,14 @@ export function DokterPage() {
         <label htmlFor="dt">No HP</label>
         <input id="dt" value={noTelepon} onChange={(e) => setNoTelepon(e.target.value)} />
       </div>
+      <div className="form-field">
+        <label htmlFor="db">Nama Bank</label>
+        <input id="db" value={namaBank} onChange={(e) => setNamaBank(e.target.value)} />
+      </div>
+      <div className="form-field">
+        <label htmlFor="dr">Nomor Rekening</label>
+        <input id="dr" value={noRekening} onChange={(e) => setNoRekening(e.target.value)} />
+      </div>
       <ModalFormFooter
         onCancel={() => setModalMode(null)}
         submitLabel="Simpan"
@@ -142,13 +158,15 @@ export function DokterPage() {
               <th>Nama</th>
               <th>Spesialisasi</th>
               <th>HP</th>
+              <th>Nama Bank</th>
+              <th>Nomor Rekening</th>
               <th>Aksi</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={4}>Belum ada dokter.</td>
+                <td colSpan={6}>Belum ada dokter.</td>
               </tr>
             ) : (
               items.map((d) => (
@@ -156,6 +174,8 @@ export function DokterPage() {
                   <td>{d.nama}</td>
                   <td>{d.spesialisasi ?? '—'}</td>
                   <td>{d.noTelepon ?? '—'}</td>
+                  <td>{d.namaBank ?? '—'}</td>
+                  <td>{d.noRekening ?? '—'}</td>
                   <td>
                     <TableRowActions
                       onEdit={() => openEdit(d)}

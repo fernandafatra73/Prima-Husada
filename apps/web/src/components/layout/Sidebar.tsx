@@ -39,6 +39,7 @@ const CATEGORY_ICONS: Record<string, (props: { className?: string }) => JSX.Elem
   laboratorium: IconTag,
   'klinik-umum': IconStethoscope,
   farmasi: IconDocument,
+  anatomi: IconStethoscope,
 };
 
 function ChevronIcon({ className }: { readonly className?: string }) {
@@ -59,6 +60,7 @@ export function Sidebar({ activeId, onNavigate, role }: SidebarProps) {
     laboratorium: true,
     'klinik-umum': true,
     farmasi: true,
+    anatomi: true,
   }));
 
   function toggleCategory(catId: string) {
@@ -67,6 +69,65 @@ export function Sidebar({ activeId, onNavigate, role }: SidebarProps) {
       [catId]: !prev[catId],
     }));
   }
+
+  function renderCategory(cat: NavCategory) {
+    const visibleItems = cat.items.filter((item) => isViewAllowedForRole(item.id as AppViewId, role));
+    if (visibleItems.length === 0) return null;
+
+    const CatIcon = CATEGORY_ICONS[cat.id] ?? IconClipboard;
+    const hasActiveChild = visibleItems.some((item) => item.id === activeId);
+    const isExpanded = openCategories[cat.id] ?? hasActiveChild;
+
+    return (
+      <li key={cat.id} className="app-sidebar__group">
+        <button
+          type="button"
+          className={`app-sidebar__group-header ${hasActiveChild ? 'app-sidebar__group-header--active' : ''}`}
+          onClick={() => toggleCategory(cat.id)}
+        >
+          <div className="app-sidebar__group-title">
+            <CatIcon className="app-sidebar__icon" />
+            <span>{cat.label}</span>
+          </div>
+          <ChevronIcon
+            className={`app-sidebar__chevron ${isExpanded ? 'app-sidebar__chevron--expanded' : ''}`}
+          />
+        </button>
+
+        {isExpanded && (
+          <ul className="app-sidebar__child-list">
+            {visibleItems.map((item: NavItem) => {
+              const isActive = activeId === item.id;
+              if (item.isPlaceholder) {
+                return (
+                  <li key={item.id}>
+                    <div className="app-sidebar__child-link app-sidebar__child-link--placeholder">
+                      <span>• {item.label}</span>
+                    </div>
+                  </li>
+                );
+              }
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={`app-sidebar__child-link ${isActive ? 'app-sidebar__child-link--active' : ''}`}
+                    onClick={() => onNavigate(item.id as AppViewId)}
+                    title={item.label}
+                  >
+                    <span>• {item.shortLabel ?? item.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </li>
+    );
+  }
+
+  const templetCategory = MAIN_NAV_CATEGORIES.find((cat) => cat.id === 'templet');
+  const otherCategories = MAIN_NAV_CATEGORIES.filter((cat) => cat.id !== 'templet');
 
   return (
     <aside className="app-sidebar" aria-label="Navigasi utama">
@@ -90,63 +151,7 @@ export function Sidebar({ activeId, onNavigate, role }: SidebarProps) {
             </button>
           </li>
 
-          {MAIN_NAV_CATEGORIES.map((cat: NavCategory) => {
-            const visibleItems = cat.items.filter((item) =>
-              isViewAllowedForRole(item.id as AppViewId, role),
-            );
-            if (visibleItems.length === 0) return null;
-
-            const CatIcon = CATEGORY_ICONS[cat.id] ?? IconClipboard;
-            const hasActiveChild = visibleItems.some((item) => item.id === activeId);
-            const isExpanded = openCategories[cat.id] ?? hasActiveChild;
-
-            return (
-              <li key={cat.id} className="app-sidebar__group">
-                <button
-                  type="button"
-                  className={`app-sidebar__group-header ${hasActiveChild ? 'app-sidebar__group-header--active' : ''}`}
-                  onClick={() => toggleCategory(cat.id)}
-                >
-                  <div className="app-sidebar__group-title">
-                    <CatIcon className="app-sidebar__icon" />
-                    <span>{cat.label}</span>
-                  </div>
-                  <ChevronIcon
-                    className={`app-sidebar__chevron ${isExpanded ? 'app-sidebar__chevron--expanded' : ''}`}
-                  />
-                </button>
-
-                {isExpanded && (
-                  <ul className="app-sidebar__child-list">
-                    {visibleItems.map((item: NavItem) => {
-                      const isActive = activeId === item.id;
-                      if (item.isPlaceholder) {
-                        return (
-                          <li key={item.id}>
-                            <div className="app-sidebar__child-link app-sidebar__child-link--placeholder">
-                              <span>• {item.label}</span>
-                            </div>
-                          </li>
-                        );
-                      }
-                      return (
-                        <li key={item.id}>
-                          <button
-                            type="button"
-                            className={`app-sidebar__child-link ${isActive ? 'app-sidebar__child-link--active' : ''}`}
-                            onClick={() => onNavigate(item.id as AppViewId)}
-                            title={item.label}
-                          >
-                            <span>• {item.shortLabel ?? item.label}</span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
+          {otherCategories.map((cat: NavCategory) => renderCategory(cat))}
 
           <li>
             <button
@@ -167,6 +172,30 @@ export function Sidebar({ activeId, onNavigate, role }: SidebarProps) {
             >
               <IconMusic className="app-sidebar__icon" />
               <span className="app-sidebar__label">Musik-PH</span>
+            </button>
+          </li>
+
+          {templetCategory && renderCategory(templetCategory)}
+
+          <li>
+            <button
+              type="button"
+              className={`app-sidebar__link${activeId === 'transfer' ? ' app-sidebar__link--active' : ''}`}
+              onClick={() => onNavigate('transfer')}
+            >
+              <IconClipboard className="app-sidebar__icon" />
+              <span className="app-sidebar__label">Transfer</span>
+            </button>
+          </li>
+
+          <li>
+            <button
+              type="button"
+              className={`app-sidebar__link${activeId === 'daftar-telpon' ? ' app-sidebar__link--active' : ''}`}
+              onClick={() => onNavigate('daftar-telpon')}
+            >
+              <IconClipboard className="app-sidebar__icon" />
+              <span className="app-sidebar__label">Daftar Telpon</span>
             </button>
           </li>
         </ul>

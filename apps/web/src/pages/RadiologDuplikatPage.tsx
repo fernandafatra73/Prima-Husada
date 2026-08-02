@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { PDFViewer, pdf } from '@react-pdf/renderer';
 import { ConfirmModal } from '../components/ui/ConfirmModal.tsx';
 import { ListPageShell } from '../components/ui/ListPageShell.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
+import { ModalFormFooter } from '../components/ui/ModalFormFooter.tsx';
 import { TableRowActions } from '../components/ui/TableRowActions.tsx';
+import { KesanRegioPicker } from '../components/KesanRegioPicker.tsx';
 import { useListQueryParams, useListSearch } from '../hooks/useListQueryParams.ts';
+import { apiDelete, apiPatch } from '../lib/api.ts';
+import { clampClinicalInput } from '../lib/clinicalText.ts';
 import { usePaginatedList } from '../hooks/usePaginatedList.ts';
-import { apiDelete } from '../lib/api.ts';
 import { formatDateShort, formatRupiah, formatUmurDetail } from '../lib/format.ts';
 import { formatRadiologName } from '../lib/pasienPrint.ts';
 import { formatKlinisDisplay, parseKlinisData } from '../lib/penunjang.ts';
@@ -61,6 +64,11 @@ export function RadiologDuplikatPage() {
   const [deleting, setDeleting] = useState(false);
   const [logoSrc, setLogoSrc] = useState('');
   const [kwitansiItem, setKwitansiItem] = useState<PasienDuplikatItem | null>(null);
+  const [quickEditItem, setQuickEditItem] = useState<PasienDuplikatItem | null>(null);
+  const [quickEditNama, setQuickEditNama] = useState('');
+  const [quickEditKesan, setQuickEditKesan] = useState('');
+  const [quickEditSaving, setQuickEditSaving] = useState(false);
+  const [quickEditError, setQuickEditError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadLogoDataUrl().then(setLogoSrc).catch(() => setLogoSrc(''));
@@ -134,6 +142,32 @@ export function RadiologDuplikatPage() {
       });
     } finally {
       setPrintingId(null);
+    }
+  }
+
+  function openQuickEdit(item: PasienDuplikatItem) {
+    setQuickEditItem(item);
+    setQuickEditNama(item.nama);
+    setQuickEditKesan(item.kesan ?? '');
+    setQuickEditError(null);
+  }
+
+  async function submitQuickEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!quickEditItem) return;
+    setQuickEditSaving(true);
+    setQuickEditError(null);
+    try {
+      await apiPatch(`/api/pasien-duplikat/${quickEditItem.id}`, {
+        nama: quickEditNama,
+        kesan: quickEditKesan,
+      });
+      setQuickEditItem(null);
+      await reload();
+    } catch (err: unknown) {
+      setQuickEditError(err instanceof Error ? err.message : 'Gagal menyimpan perubahan');
+    } finally {
+      setQuickEditSaving(false);
     }
   }
 
@@ -260,6 +294,15 @@ export function RadiologDuplikatPage() {
                   </td>
                   <td>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn--xs btn--ghost"
+                        onClick={() => openQuickEdit(p)}
+                        title="Edit cepat: nama & kesan"
+                        style={{ border: '1px solid var(--color-border)' }}
+                      >
+                        Edit²
+                      </button>
                       <TableRowActions
                         onEdit={() => setDetailItem(p)}
                         editLabel="Lihat detail & kesan radiologi"
@@ -366,6 +409,48 @@ export function RadiologDuplikatPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={quickEditItem !== null}
+        title="Edit Cepat: Nama & Kesan"
+        onClose={() => setQuickEditItem(null)}
+        size="xl"
+      >
+        <form onSubmit={(e) => void submitQuickEdit(e)} className="form-grid">
+          {quickEditError && (
+            <div className="alert alert--error form-grid--full">{quickEditError}</div>
+          )}
+
+          <div className="form-field form-grid--full">
+            <KesanRegioPicker onSelect={(teks) => setQuickEditKesan(teks)} />
+          </div>
+
+          <div className="form-field form-grid--full">
+            <label htmlFor="rd-qe-nama">Nama pasien</label>
+            <input
+              id="rd-qe-nama"
+              required
+              value={quickEditNama}
+              onChange={(e) => setQuickEditNama(e.target.value)}
+            />
+          </div>
+          <div className="form-field form-grid--full">
+            <label htmlFor="rd-qe-kesan">Kesan</label>
+            <textarea
+              id="rd-qe-kesan"
+              rows={4}
+              value={quickEditKesan}
+              onChange={(e) => setQuickEditKesan(clampClinicalInput(e.target.value))}
+              placeholder="Isi kesan radiologi..."
+            />
+          </div>
+          <ModalFormFooter
+            onCancel={() => setQuickEditItem(null)}
+            submitLabel="Simpan"
+            loading={quickEditSaving}
+          />
+        </form>
       </Modal>
 
       <ConfirmModal

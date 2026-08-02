@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { DashboardCharts } from '../components/charts/DashboardCharts.tsx';
 import { useListRefresh } from '../context/ListRefreshContext.tsx';
 import { apiGet } from '../lib/api.ts';
-import { formatCompactRupiah } from '../lib/format.ts';
 
 interface DashboardResponse {
   readonly metrics: {
@@ -48,10 +47,6 @@ export function DashboardPage() {
         { label: 'Menunggu Hasil', value: String(m.menungguHasil) },
         { label: 'Selesai Hari Ini', value: String(m.selesaiHariIni) },
         { label: 'Total Pemeriksaan', value: String(m.totalPemeriksaan) },
-        { label: 'Omzet Hari Ini', value: formatCompactRupiah(m.omzetHariIni) },
-        { label: 'Total Sharing', value: formatCompactRupiah(m.totalSharingHariIni) },
-        { label: 'Dokter Pengirim', value: String(m.dokterPengirim) },
-        { label: 'Radiolog Aktif', value: String(m.radiologAktif) },
       ]
     : [];
 

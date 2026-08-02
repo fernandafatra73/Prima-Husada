@@ -102,6 +102,10 @@ export async function registerKlinikRoutes(app: FastifyInstance): Promise<void> 
       hargaBeli?: string | number;
       hargaJual?: string | number;
       keterangan?: string;
+      tanggalBeli?: string;
+      tanggalExpire?: string;
+      penyedia?: string;
+      telponPenyedia?: string;
     };
   }>('/api/farmasi-bhp', async (req, reply) => {
     if (!req.body.kode?.trim()) return badRequest(reply, 'Kode wajib diisi');
@@ -121,6 +125,10 @@ export async function registerKlinikRoutes(app: FastifyInstance): Promise<void> 
         hargaBeli: req.body.hargaBeli ? new Decimal(req.body.hargaBeli) : new Decimal(0),
         hargaJual: req.body.hargaJual ? new Decimal(req.body.hargaJual) : new Decimal(0),
         keterangan: req.body.keterangan?.trim() ?? '',
+        tanggalBeli: req.body.tanggalBeli ? new Date(req.body.tanggalBeli) : null,
+        tanggalExpire: req.body.tanggalExpire ? new Date(req.body.tanggalExpire) : null,
+        penyedia: req.body.penyedia?.trim() || null,
+        telponPenyedia: req.body.telponPenyedia?.trim() || null,
       },
     });
 
@@ -145,6 +153,10 @@ export async function registerKlinikRoutes(app: FastifyInstance): Promise<void> 
       hargaBeli?: string | number;
       hargaJual?: string | number;
       keterangan?: string;
+      tanggalBeli?: string | null;
+      tanggalExpire?: string | null;
+      penyedia?: string;
+      telponPenyedia?: string;
     };
   }>('/api/farmasi-bhp/:id', async (req, reply) => {
     const existing = await prisma.farmasiBhp.findUnique({ where: { id: req.params.id } });
@@ -162,6 +174,21 @@ export async function registerKlinikRoutes(app: FastifyInstance): Promise<void> 
         hargaBeli: req.body.hargaBeli !== undefined ? new Decimal(req.body.hargaBeli) : existing.hargaBeli,
         hargaJual: req.body.hargaJual !== undefined ? new Decimal(req.body.hargaJual) : existing.hargaJual,
         keterangan: req.body.keterangan !== undefined ? req.body.keterangan.trim() : existing.keterangan,
+        tanggalBeli:
+          req.body.tanggalBeli !== undefined
+            ? req.body.tanggalBeli
+              ? new Date(req.body.tanggalBeli)
+              : null
+            : existing.tanggalBeli,
+        tanggalExpire:
+          req.body.tanggalExpire !== undefined
+            ? req.body.tanggalExpire
+              ? new Date(req.body.tanggalExpire)
+              : null
+            : existing.tanggalExpire,
+        penyedia: req.body.penyedia !== undefined ? req.body.penyedia?.trim() || null : existing.penyedia,
+        telponPenyedia:
+          req.body.telponPenyedia !== undefined ? req.body.telponPenyedia?.trim() || null : existing.telponPenyedia,
       },
     });
 

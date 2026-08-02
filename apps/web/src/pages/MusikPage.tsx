@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { playSong, songDurationMs, SONGS, type Song } from '../lib/musicPlayer.ts';
+import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/api.ts';
+import { Modal } from '../components/ui/Modal.tsx';
+import { ModalFormFooter } from '../components/ui/ModalFormFooter.tsx';
 import '../components/ui/ui.css';
+
+interface PlaylistItem {
+  readonly id: string;
+  readonly judul: string;
+  readonly audioData: string;
+  readonly lirik: string | null;
+}
 
 export function MusikPage() {
   const [customAudioUrl, setCustomAudioUrl] = useState<string | null>(null);
@@ -10,6 +20,112 @@ export function MusikPage() {
   const [isOn, setIsOn] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const loopTimeoutRef = useRef<number | null>(null);
+
+  const [playlist, setPlaylist] = useState<readonly PlaylistItem[]>([]);
+  const [playlistLoading, setPlaylistLoading] = useState(true);
+  const [playlistError, setPlaylistError] = useState<string | null>(null);
+  const [uploadingLagu, setUploadingLagu] = useState(false);
+  const [deletingLaguId, setDeletingLaguId] = useState<string | null>(null);
+  const [playingLaguId, setPlayingLaguId] = useState<string | null>(null);
+  const playlistAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [lirikEditing, setLirikEditing] = useState<PlaylistItem | null>(null);
+  const [lirikDraft, setLirikDraft] = useState('');
+  const [savingLirik, setSavingLirik] = useState(false);
+
+  async function loadPlaylist() {
+    setPlaylistLoading(true);
+    setPlaylistError(null);
+    try {
+      const res = await apiGet<{ items: readonly PlaylistItem[] }>('/api/playlist-lagu');
+      setPlaylist(res.items);
+    } catch (err: unknown) {
+      setPlaylistError(err instanceof Error ? err.message : 'Gagal memuat daftar lagu');
+    } finally {
+      setPlaylistLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadPlaylist();
+  }, []);
+
+  function handleAddLagu(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPlaylistError(null);
+    setUploadingLagu(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      void (async () => {
+        try {
+          if (typeof reader.result !== 'string') throw new Error('Gagal membaca file audio');
+          const judul = file.name.replace(/\.[^/.]+$/, '');
+          await apiPost('/api/playlist-lagu', { judul, audioData: reader.result });
+          await loadPlaylist();
+        } catch (err: unknown) {
+          setPlaylistError(err instanceof Error ? err.message : 'Gagal menambah lagu');
+        } finally {
+          setUploadingLagu(false);
+        }
+      })();
+    };
+    reader.onerror = () => {
+      setPlaylistError('Gagal membaca file audio');
+      setUploadingLagu(false);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function playPlaylistItem(item: PlaylistItem) {
+    turnOff();
+    playlistAudioRef.current?.pause();
+    const audio = new Audio(item.audioData);
+    playlistAudioRef.current = audio;
+    setPlayingLaguId(item.id);
+    audio.onended = () => setPlayingLaguId((cur) => (cur === item.id ? null : cur));
+    void audio.play();
+  }
+
+  function stopPlaylistItem() {
+    playlistAudioRef.current?.pause();
+    playlistAudioRef.current = null;
+    setPlayingLaguId(null);
+  }
+
+  function openLirikEdit(item: PlaylistItem) {
+    setLirikEditing(item);
+    setLirikDraft(item.lirik ?? '');
+  }
+
+  async function saveLirik() {
+    if (!lirikEditing) return;
+    setSavingLirik(true);
+    setPlaylistError(null);
+    try {
+      await apiPatch(`/api/playlist-lagu/${lirikEditing.id}`, { lirik: lirikDraft });
+      setLirikEditing(null);
+      await loadPlaylist();
+    } catch (err: unknown) {
+      setPlaylistError(err instanceof Error ? err.message : 'Gagal menyimpan lirik');
+    } finally {
+      setSavingLirik(false);
+    }
+  }
+
+  async function deletePlaylistItem(id: string) {
+    setDeletingLaguId(id);
+    setPlaylistError(null);
+    try {
+      if (playingLaguId === id) stopPlaylistItem();
+      await apiDelete(`/api/playlist-lagu/${id}`);
+      await loadPlaylist();
+    } catch (err: unknown) {
+      setPlaylistError(err instanceof Error ? err.message : 'Gagal menghapus lagu');
+    } finally {
+      setDeletingLaguId(null);
+    }
+  }
 
   useEffect(() => {
     if (!customAudioUrl) return;
@@ -27,6 +143,8 @@ export function MusikPage() {
       if (loopTimeoutRef.current !== null) {
         window.clearTimeout(loopTimeoutRef.current);
       }
+      audioRef.current?.pause();
+      playlistAudioRef.current?.pause();
     };
   }, []);
 
@@ -85,9 +203,18 @@ export function MusikPage() {
     setCustomFileName(null);
   }
 
+  const playingSong = playlist.find((p) => p.id === playingLaguId) ?? null;
+
   return (
     <div style={{ maxWidth: '900px' }}>
-      <h2 style={{ margin: '0 0 0.25rem' }}>🎵 Musik-PH</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <h2 style={{ margin: '0 0 0.25rem' }}>🎵 Musik-PH</h2>
+        {playingSong?.lirik && (
+          <div className="musik-lirik-marquee" aria-hidden="true">
+            <span className="musik-lirik-marquee__text">{playingSong.lirik}</span>
+          </div>
+        )}
+      </div>
       <p style={{ margin: '0 0 1.5rem', color: '#64748b' }}>
         Putar musik pilihan Anda sendiri dari komputer, atau gunakan nada bawaan.
       </p>
@@ -243,34 +370,123 @@ export function MusikPage() {
           padding: '1.25rem',
         }}
       >
-        <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.75rem' }}>
-          Nada Bawaan
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '0.75rem',
+          }}
+        >
+          <div style={{ fontWeight: 700, color: '#0f172a' }}>Daftar Lagu</div>
+          <label
+            className="btn btn--sm btn--primary"
+            style={{ cursor: uploadingLagu ? 'wait' : 'pointer', margin: 0 }}
+          >
+            {uploadingLagu ? 'Mengunggah…' : '+ Tambah Lagu'}
+            <input
+              type="file"
+              accept="audio/*"
+              onChange={handleAddLagu}
+              disabled={uploadingLagu}
+              style={{ display: 'none' }}
+            />
+          </label>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {SONGS.map((song) => (
-            <div
-              key={song.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0.5rem 0.75rem',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-              }}
-            >
-              <span>{song.label}</span>
-              <button
-                type="button"
-                className="btn btn--sm btn--secondary"
-                onClick={() => playSong(song)}
-              >
-                ▶️ Putar
-              </button>
-            </div>
-          ))}
-        </div>
+
+        {playlistError && (
+          <p style={{ color: '#dc2626', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{playlistError}</p>
+        )}
+
+        {playlistLoading ? (
+          <p style={{ color: '#64748b', fontSize: '0.85rem' }}>Memuat daftar lagu…</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th style={{ width: '50px' }}>No</th>
+                <th>Judul Lagu</th>
+                <th style={{ width: '160px' }}>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {playlist.length === 0 ? (
+                <tr>
+                  <td colSpan={3}>Belum ada lagu. Klik "+ Tambah Lagu" untuk menambahkan dari komputer.</td>
+                </tr>
+              ) : (
+                playlist.map((item, idx) => {
+                  const isPlaying = playingLaguId === item.id;
+                  return (
+                    <tr key={item.id} style={isPlaying ? { background: '#f0f9ff' } : undefined}>
+                      <td>{idx + 1}</td>
+                      <td>🎵 {item.judul}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn--sm btn--secondary"
+                            onClick={() => (isPlaying ? stopPlaylistItem() : playPlaylistItem(item))}
+                          >
+                            {isPlaying ? '⏸️ Stop' : '▶️ Putar'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--sm btn--secondary"
+                            onClick={() => openLirikEdit(item)}
+                          >
+                            📝 Lirik
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--sm btn--danger"
+                            onClick={() => void deletePlaylistItem(item.id)}
+                            disabled={deletingLaguId === item.id}
+                          >
+                            🗑️ {deletingLaguId === item.id ? 'Menghapus…' : 'Hapus'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
+
+      <Modal
+        open={lirikEditing !== null}
+        title={`Lirik — ${lirikEditing?.judul ?? ''}`}
+        onClose={() => setLirikEditing(null)}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void saveLirik();
+          }}
+          className="form-grid"
+        >
+          <div className="form-field form-grid--full">
+            <label htmlFor="lirik-text">
+              Teks lirik (ditampilkan sebagai running text biru saat lagu ini diputar)
+            </label>
+            <textarea
+              id="lirik-text"
+              rows={8}
+              value={lirikDraft}
+              onChange={(e) => setLirikDraft(e.target.value)}
+              placeholder="Tempel/ketik lirik lagu di sini…"
+            />
+          </div>
+          <ModalFormFooter
+            onCancel={() => setLirikEditing(null)}
+            submitLabel="Simpan"
+            loading={savingLirik}
+          />
+        </form>
+      </Modal>
     </div>
   );
 }

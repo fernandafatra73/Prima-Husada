@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import logoLabprima from '@src/image/logo-labprima.png';
 import { apiPost } from '../lib/api.ts';
 import type { AuthUser } from '../lib/auth.ts';
 import './login.css';
@@ -36,14 +37,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     <main className="login-page">
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-panel__brand">
-          <div className="login-panel__mark" aria-hidden>
-            LP
-          </div>
-          <div>
-            <p className="login-panel__eyebrow">LabPrima</p>
-            <h1 id="login-title">Masuk ke sistem</h1>
-          </div>
+          <img src={logoLabprima} alt="Klinik Prima Husada" className="login-panel__logo" />
+          <p className="login-panel__eyebrow">Klinik Prima Husada</p>
         </div>
+
+        <div className="login-panel__divider" aria-hidden />
+
+        <h1 id="login-title" className="login-panel__title">Masuk ke sistem</h1>
 
         <form className="login-form" onSubmit={(event) => void onSubmit(event)}>
           <div className="form-field">

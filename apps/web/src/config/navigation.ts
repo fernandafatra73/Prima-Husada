@@ -27,7 +27,6 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
     iconName: 'clipboard',
     items: [
       { id: 'pendaftaran-umum', label: 'Pendaftaran Umum', shortLabel: 'Pendaftaran Umum' },
-      { id: 'transfer', label: 'Transfer', shortLabel: 'Transfer' },
     ],
   },
   {
@@ -80,6 +79,7 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
     items: [
       { id: 'keuangan-pembukuan', label: 'Sistem Keuangan & Pembukuan', shortLabel: 'Buku Kas & Keuangan' },
       { id: 'petugas-kasir', label: 'Petugas Kasir', shortLabel: 'Petugas Kasir' },
+      { id: 'petugas-admin-klinik', label: 'Petugas Admin Klinik', shortLabel: 'Petugas Admin Klinik' },
       { id: 'sharing', label: 'Manajemen Sharing Dokter', shortLabel: 'Sharing Dokter' },
       { id: 'laporan-tahunan', label: 'Laporan Tahunan', shortLabel: 'Laporan Tahunan' },
       { id: 'laporan-pajak', label: 'Laporan Pajak', shortLabel: 'Laporan Pajak' },
@@ -92,6 +92,8 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
     iconName: 'shield',
     items: [
       { id: 'dokter', label: 'Manajemen Dokter Pengirim', shortLabel: 'Dokter Pengirim' },
+      { id: 'karyawan-klinik', label: 'Manajemen Karyawan Klinik', shortLabel: 'Karyawan Klinik' },
+      { id: 'tanda-tangan-elektronik', label: 'Tanda Tangan Elektronik', shortLabel: 'Tanda Tangan Elektronik' },
       { id: 'role', label: 'Manajemen Role & Staff', shortLabel: 'Role & Staff' },
       { id: 'admin', label: 'Manajemen Admin', shortLabel: 'Admin' },
     ],
@@ -114,6 +116,24 @@ export const MAIN_NAV_CATEGORIES: readonly NavCategory[] = [
       { id: 'farmasi-bhp', label: 'Manajemen Farmasi & BHP', shortLabel: 'Stok Obat & BHP' },
     ],
   },
+  {
+    id: 'anatomi',
+    label: 'Anatomi',
+    iconName: 'stethoscope',
+    items: [
+      { id: 'anatomi-thorak', label: 'Thorak', shortLabel: 'Thorak' },
+      { id: 'anatomi-kepala', label: 'Kepala', shortLabel: 'Kepala' },
+      { id: 'anatomi-ossa-manus', label: 'Ossa Manus', shortLabel: 'Ossa Manus' },
+      { id: 'anatomi-anthebrachi', label: 'Anthebrachi', shortLabel: 'Anthebrachi' },
+      { id: 'anatomi-shoulder-joint', label: 'Shoulder Joint', shortLabel: 'Shoulder Joint' },
+      { id: 'anatomi-lumbosacral', label: 'Lumbosacral', shortLabel: 'Lumbosacral' },
+      { id: 'anatomi-bno', label: 'BNO', shortLabel: 'BNO' },
+      { id: 'anatomi-femur', label: 'Femur', shortLabel: 'Femur' },
+      { id: 'anatomi-cruris', label: 'Cruris', shortLabel: 'Cruris' },
+      { id: 'anatomi-ankle-joint', label: 'Ankle Joint', shortLabel: 'Ankle Joint' },
+      { id: 'anatomi-pedis', label: 'Pedis', shortLabel: 'Pedis' },
+    ],
+  },
 ];
 
 export const MAIN_NAV_ITEMS: readonly NavItem[] = [
@@ -127,6 +147,7 @@ export const MAIN_NAV_ITEMS: readonly NavItem[] = [
   { id: 'farmasi-bhp', label: 'Manajemen Farmasi & BHP', shortLabel: 'Stok Obat & BHP' },
   { id: 'keuangan-pembukuan', label: 'Sistem Keuangan & Pembukuan', shortLabel: 'Buku Kas & Keuangan' },
   { id: 'petugas-kasir', label: 'Petugas Kasir', shortLabel: 'Petugas Kasir' },
+  { id: 'petugas-admin-klinik', label: 'Petugas Admin Klinik', shortLabel: 'Petugas Admin Klinik' },
   { id: 'lab', label: 'Registrasi Lab', shortLabel: 'Registrasi Lab' },
   { id: 'lab-duplikat', label: 'Duplikat Registrasi Lab', shortLabel: 'Duplikat Registrasi' },
   { id: 'kwitansi-laboratorium', label: 'Kwitansi Laboratorium', shortLabel: 'Kwitansi' },
@@ -162,6 +183,20 @@ export const MAIN_NAV_ITEMS: readonly NavItem[] = [
   { id: 'analisa-foto-rontgen', label: 'Analisa Foto Rontgen', shortLabel: 'Analisa Foto Rontgen' },
   { id: 'role', label: 'Manajemen Role', shortLabel: 'Role' },
   { id: 'admin', label: 'Manajemen Admin', shortLabel: 'Admin' },
+  { id: 'karyawan-klinik', label: 'Manajemen Karyawan Klinik', shortLabel: 'Karyawan Klinik' },
+  { id: 'daftar-telpon', label: 'Daftar Telpon', shortLabel: 'Daftar Telpon' },
+  { id: 'tanda-tangan-elektronik', label: 'Tanda Tangan Elektronik', shortLabel: 'Tanda Tangan Elektronik' },
+  { id: 'anatomi-thorak', label: 'Thorak', shortLabel: 'Thorak' },
+  { id: 'anatomi-kepala', label: 'Kepala', shortLabel: 'Kepala' },
+  { id: 'anatomi-ossa-manus', label: 'Ossa Manus', shortLabel: 'Ossa Manus' },
+  { id: 'anatomi-anthebrachi', label: 'Anthebrachi', shortLabel: 'Anthebrachi' },
+  { id: 'anatomi-shoulder-joint', label: 'Shoulder Joint', shortLabel: 'Shoulder Joint' },
+  { id: 'anatomi-lumbosacral', label: 'Lumbosacral', shortLabel: 'Lumbosacral' },
+  { id: 'anatomi-bno', label: 'BNO', shortLabel: 'BNO' },
+  { id: 'anatomi-femur', label: 'Femur', shortLabel: 'Femur' },
+  { id: 'anatomi-cruris', label: 'Cruris', shortLabel: 'Cruris' },
+  { id: 'anatomi-ankle-joint', label: 'Ankle Joint', shortLabel: 'Ankle Joint' },
+  { id: 'anatomi-pedis', label: 'Pedis', shortLabel: 'Pedis' },
 ] as const;
 
 export type MainNavId = (typeof MAIN_NAV_ITEMS)[number]['id'];

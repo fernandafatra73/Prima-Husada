@@ -9,16 +9,22 @@ import {
   dokterListWhere,
   hargaListWhere,
   jenisListWhere,
+  karyawanKlinikListWhere,
   kesanListWhere,
   pasienAntreanWhere,
   pasienDuplikatListWhere,
   pasienListWhere,
   pendaftaranUmumListWhere,
+  petugasAdminKlinikListWhere,
   petugasKasirListWhere,
+  daftarTelponListWhere,
   petugasLabListWhere,
   radiograferListWhere,
   radiologListWhere,
   staffListWhere,
+  suratKeteranganRujukanListWhere,
+  suratKeteranganSehatListWhere,
+  tandaTanganElektronikListWhere,
 } from '../lib/searchWhere.js';
 import { syncPasienDuplikat } from '../lib/pasienDuplikat.js';
 import { computeUmur, serializeDecimal } from '../lib/serialize.js';
@@ -75,7 +81,14 @@ export async function registerCrudRoutes(app: FastifyInstance) {
   });
 
   app.post<{
-    Body: { nama: string; spesialisasi?: string; noTelepon?: string; defaultSharingAmount?: number };
+    Body: {
+      nama: string;
+      spesialisasi?: string;
+      noTelepon?: string;
+      namaBank?: string;
+      noRekening?: string;
+      defaultSharingAmount?: number;
+    };
   }>('/api/dokter', async (req, reply) => {
     if (!req.body.nama?.trim()) return badRequest(reply, 'nama wajib diisi');
     const item = await prisma.dokter.create({
@@ -83,6 +96,8 @@ export async function registerCrudRoutes(app: FastifyInstance) {
         nama: req.body.nama.trim(),
         spesialisasi: req.body.spesialisasi?.trim() || null,
         noTelepon: req.body.noTelepon?.trim() || null,
+        namaBank: req.body.namaBank?.trim() || null,
+        noRekening: req.body.noRekening?.trim() || null,
         defaultSharingAmount: req.body.defaultSharingAmount ?? 0,
       },
     });
@@ -102,7 +117,14 @@ export async function registerCrudRoutes(app: FastifyInstance) {
 
   app.patch<{
     Params: { id: string };
-    Body: { nama?: string; spesialisasi?: string; noTelepon?: string; defaultSharingAmount?: number };
+    Body: {
+      nama?: string;
+      spesialisasi?: string;
+      noTelepon?: string;
+      namaBank?: string;
+      noRekening?: string;
+      defaultSharingAmount?: number;
+    };
   }>('/api/dokter/:id', async (req, reply) => {
     const existing = await prisma.dokter.findUnique({ where: { id: req.params.id } });
     if (!existing) return reply.status(404).send({ error: 'Dokter tidak ditemukan' });
@@ -112,12 +134,64 @@ export async function registerCrudRoutes(app: FastifyInstance) {
         nama: req.body.nama?.trim() ?? existing.nama,
         spesialisasi: req.body.spesialisasi !== undefined ? req.body.spesialisasi?.trim() || null : existing.spesialisasi,
         noTelepon: req.body.noTelepon !== undefined ? req.body.noTelepon?.trim() || null : existing.noTelepon,
+        namaBank: req.body.namaBank !== undefined ? req.body.namaBank?.trim() || null : existing.namaBank,
+        noRekening: req.body.noRekening !== undefined ? req.body.noRekening?.trim() || null : existing.noRekening,
         defaultSharingAmount: req.body.defaultSharingAmount ?? existing.defaultSharingAmount,
       },
     });
     return {
       item: { ...item, defaultSharingAmount: serializeDecimal(item.defaultSharingAmount) },
     };
+  });
+
+  app.get<{ Querystring: ListQuery }>('/api/karyawan-klinik', async (req) => {
+    const { page, limit, skip } = parsePagination(req.query);
+    const where = karyawanKlinikListWhere(req.query.q);
+    const [total, items] = await Promise.all([
+      prisma.karyawanKlinik.count({ where }),
+      prisma.karyawanKlinik.findMany({ where, orderBy: { nama: 'asc' }, skip, take: limit }),
+    ]);
+    return { items, pagination: buildPaginationMeta(total, page, limit) };
+  });
+
+  app.post<{
+    Body: { nama: string; spesialisasi?: string; noTelepon?: string; namaBank?: string; noRekening?: string };
+  }>('/api/karyawan-klinik', async (req, reply) => {
+    if (!req.body.nama?.trim()) return badRequest(reply, 'nama wajib diisi');
+    const item = await prisma.karyawanKlinik.create({
+      data: {
+        nama: req.body.nama.trim(),
+        spesialisasi: req.body.spesialisasi?.trim() || null,
+        noTelepon: req.body.noTelepon?.trim() || null,
+        namaBank: req.body.namaBank?.trim() || null,
+        noRekening: req.body.noRekening?.trim() || null,
+      },
+    });
+    return reply.status(201).send({ item });
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/karyawan-klinik/:id', async (req) => {
+    await prisma.karyawanKlinik.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: { nama?: string; spesialisasi?: string; noTelepon?: string; namaBank?: string; noRekening?: string };
+  }>('/api/karyawan-klinik/:id', async (req, reply) => {
+    const existing = await prisma.karyawanKlinik.findUnique({ where: { id: req.params.id } });
+    if (!existing) return reply.status(404).send({ error: 'Karyawan tidak ditemukan' });
+    const item = await prisma.karyawanKlinik.update({
+      where: { id: req.params.id },
+      data: {
+        nama: req.body.nama?.trim() ?? existing.nama,
+        spesialisasi: req.body.spesialisasi !== undefined ? req.body.spesialisasi?.trim() || null : existing.spesialisasi,
+        noTelepon: req.body.noTelepon !== undefined ? req.body.noTelepon?.trim() || null : existing.noTelepon,
+        namaBank: req.body.namaBank !== undefined ? req.body.namaBank?.trim() || null : existing.namaBank,
+        noRekening: req.body.noRekening !== undefined ? req.body.noRekening?.trim() || null : existing.noRekening,
+      },
+    });
+    return { item };
   });
 
   app.get<{ Querystring: ListQuery }>('/api/radiolog', async (req) => {
@@ -314,6 +388,53 @@ export async function registerCrudRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>('/api/petugas-kasir/:id', async (req) => {
     await prisma.petugasKasir.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
+  app.get<{ Querystring: ListQuery }>('/api/petugas-admin-klinik', async (req) => {
+    const { page, limit, skip } = parsePagination(req.query);
+    const where = petugasAdminKlinikListWhere(req.query.q);
+    const [total, items] = await Promise.all([
+      prisma.petugasAdminKlinik.count({ where }),
+      prisma.petugasAdminKlinik.findMany({
+        where,
+        orderBy: { nama: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return { items, pagination: buildPaginationMeta(total, page, limit) };
+  });
+
+  app.post<{ Body: { nama: string; noHp?: string } }>('/api/petugas-admin-klinik', async (req, reply) => {
+    if (!req.body.nama?.trim()) return badRequest(reply, 'nama wajib diisi');
+    const item = await prisma.petugasAdminKlinik.create({
+      data: {
+        nama: req.body.nama.trim(),
+        noHp: req.body.noHp?.trim() || null,
+      },
+    });
+    return reply.status(201).send({ item });
+  });
+
+  app.patch<{ Params: { id: string }; Body: { nama?: string; noHp?: string } }>(
+    '/api/petugas-admin-klinik/:id',
+    async (req, reply) => {
+      const existing = await prisma.petugasAdminKlinik.findUnique({ where: { id: req.params.id } });
+      if (!existing) return reply.status(404).send({ error: 'Petugas admin klinik tidak ditemukan' });
+      const item = await prisma.petugasAdminKlinik.update({
+        where: { id: req.params.id },
+        data: {
+          nama: req.body.nama?.trim() ?? existing.nama,
+          noHp: req.body.noHp !== undefined ? req.body.noHp?.trim() || null : existing.noHp,
+        },
+      });
+      return { item };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/petugas-admin-klinik/:id', async (req) => {
+    await prisma.petugasAdminKlinik.delete({ where: { id: req.params.id } });
     return { ok: true };
   });
 
@@ -1147,6 +1268,233 @@ export async function registerCrudRoutes(app: FastifyInstance) {
     },
   );
 
+  // ─── Anatomi (galeri gambar referensi per regio) ───────────────────────────
+
+  app.get<{ Querystring: { regio?: string } }>('/api/anatomi-gambar', async (req) => {
+    if (!req.query.regio) return { items: [] };
+    const items = await prisma.anatomiGambar.findMany({
+      where: { regio: req.query.regio },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        regio: true,
+        keterangan: true,
+        createdAt: true,
+        thumbnail: true,
+        // Fallback untuk data lama yang diunggah sebelum ada kolom thumbnail.
+        gambar: true,
+      },
+    });
+    // Daftar galeri memuat versi kecil (thumbnail) supaya cepat; versi ukuran
+    // penuh dipanggil terpisah lewat GET /api/anatomi-gambar/:id saat di-zoom.
+    return {
+      items: items.map(({ gambar, thumbnail, ...rest }) => ({
+        ...rest,
+        gambar: thumbnail ?? gambar,
+      })),
+    };
+  });
+
+  app.get<{ Params: { id: string } }>('/api/anatomi-gambar/:id', async (req, reply) => {
+    const item = await prisma.anatomiGambar.findUnique({ where: { id: req.params.id } });
+    if (!item) return reply.status(404).send({ error: 'Gambar tidak ditemukan' });
+    return { item };
+  });
+
+  app.post<{ Body: { regio: string; gambar: string; thumbnail?: string; keterangan?: string } }>(
+    '/api/anatomi-gambar',
+    async (req, reply) => {
+      if (!req.body.regio?.trim() || !req.body.gambar?.trim()) {
+        return badRequest(reply, 'regio dan gambar wajib');
+      }
+      const item = await prisma.anatomiGambar.create({
+        data: {
+          regio: req.body.regio.trim(),
+          gambar: req.body.gambar,
+          thumbnail: req.body.thumbnail || req.body.gambar,
+          keterangan: req.body.keterangan?.trim() || null,
+        },
+      });
+      return reply.status(201).send({ item });
+    },
+  );
+
+  app.patch<{ Params: { id: string }; Body: { keterangan?: string } }>(
+    '/api/anatomi-gambar/:id',
+    async (req, reply) => {
+      const existing = await prisma.anatomiGambar.findUnique({ where: { id: req.params.id } });
+      if (!existing) return reply.status(404).send({ error: 'Gambar tidak ditemukan' });
+      const item = await prisma.anatomiGambar.update({
+        where: { id: req.params.id },
+        data: {
+          keterangan: req.body.keterangan !== undefined ? req.body.keterangan.trim() || null : existing.keterangan,
+        },
+      });
+      return { item };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/anatomi-gambar/:id', async (req) => {
+    await prisma.anatomiGambar.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
+  // ─── Kesan Bacaan (grup > kategori > bacaan, menu cepat isi Kesan) ─────────
+
+  app.get('/api/kesan-bacaan-grup', async () => {
+    const items = await prisma.kesanBacaanGrup.findMany({
+      orderBy: { createdAt: 'asc' },
+      include: {
+        kategori: {
+          orderBy: [{ urutan: 'asc' }, { createdAt: 'asc' }],
+          include: { bacaan: { orderBy: { createdAt: 'asc' } } },
+        },
+      },
+    });
+    return { items };
+  });
+
+  app.post<{ Body: { nama: string } }>('/api/kesan-bacaan-grup', async (req, reply) => {
+    if (!req.body.nama?.trim()) return badRequest(reply, 'nama grup wajib');
+    const item = await prisma.kesanBacaanGrup.create({ data: { nama: req.body.nama.trim() } });
+    return reply.status(201).send({ item });
+  });
+
+  app.patch<{ Params: { id: string }; Body: { nama?: string } }>(
+    '/api/kesan-bacaan-grup/:id',
+    async (req, reply) => {
+      const existing = await prisma.kesanBacaanGrup.findUnique({ where: { id: req.params.id } });
+      if (!existing) return reply.status(404).send({ error: 'Grup tidak ditemukan' });
+      const item = await prisma.kesanBacaanGrup.update({
+        where: { id: req.params.id },
+        data: { nama: req.body.nama?.trim() || existing.nama },
+      });
+      return { item };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/kesan-bacaan-grup/:id', async (req) => {
+    await prisma.kesanBacaanGrup.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
+  app.post<{ Body: { grupId: string; nama: string; urutan?: number } }>(
+    '/api/kesan-bacaan-kategori',
+    async (req, reply) => {
+      if (!req.body.grupId || !req.body.nama?.trim()) {
+        return badRequest(reply, 'grupId dan nama kategori wajib');
+      }
+      const grup = await prisma.kesanBacaanGrup.findUnique({ where: { id: req.body.grupId } });
+      if (!grup) return badRequest(reply, 'Grup tidak valid');
+      const item = await prisma.kesanBacaanKategori.create({
+        data: {
+          grupId: req.body.grupId,
+          nama: req.body.nama.trim(),
+          urutan: req.body.urutan ?? 0,
+        },
+      });
+      return reply.status(201).send({ item });
+    },
+  );
+
+  app.patch<{ Params: { id: string }; Body: { nama?: string } }>(
+    '/api/kesan-bacaan-kategori/:id',
+    async (req, reply) => {
+      const existing = await prisma.kesanBacaanKategori.findUnique({ where: { id: req.params.id } });
+      if (!existing) return reply.status(404).send({ error: 'Kategori tidak ditemukan' });
+      const item = await prisma.kesanBacaanKategori.update({
+        where: { id: req.params.id },
+        data: { nama: req.body.nama?.trim() || existing.nama },
+      });
+      return { item };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/kesan-bacaan-kategori/:id', async (req) => {
+    await prisma.kesanBacaanKategori.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
+  app.post<{ Body: { kategoriId: string; teks: string } }>(
+    '/api/kesan-bacaan',
+    async (req, reply) => {
+      if (!req.body.kategoriId || !req.body.teks?.trim()) {
+        return badRequest(reply, 'kategoriId dan teks wajib');
+      }
+      const kategori = await prisma.kesanBacaanKategori.findUnique({
+        where: { id: req.body.kategoriId },
+      });
+      if (!kategori) return badRequest(reply, 'Kategori tidak valid');
+      const item = await prisma.kesanBacaan.create({
+        data: { kategoriId: req.body.kategoriId, teks: req.body.teks.trim() },
+      });
+      return reply.status(201).send({ item });
+    },
+  );
+
+  app.patch<{ Params: { id: string }; Body: { teks?: string } }>(
+    '/api/kesan-bacaan/:id',
+    async (req, reply) => {
+      const existing = await prisma.kesanBacaan.findUnique({ where: { id: req.params.id } });
+      if (!existing) return reply.status(404).send({ error: 'Bacaan tidak ditemukan' });
+      const item = await prisma.kesanBacaan.update({
+        where: { id: req.params.id },
+        data: { teks: req.body.teks?.trim() || existing.teks },
+      });
+      return { item };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/kesan-bacaan/:id', async (req) => {
+    await prisma.kesanBacaan.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
+  // ─── Playlist Lagu (Musik-PH) ───────────────────────────────────────────────
+
+  app.get('/api/playlist-lagu', async () => {
+    const items = await prisma.playlistLagu.findMany({ orderBy: { createdAt: 'asc' } });
+    return { items };
+  });
+
+  app.post<{ Body: { judul: string; audioData: string; lirik?: string } }>(
+    '/api/playlist-lagu',
+    async (req, reply) => {
+      if (!req.body.judul?.trim() || !req.body.audioData?.trim()) {
+        return badRequest(reply, 'judul dan audioData wajib');
+      }
+      const item = await prisma.playlistLagu.create({
+        data: {
+          judul: req.body.judul.trim(),
+          audioData: req.body.audioData,
+          lirik: req.body.lirik?.trim() || null,
+        },
+      });
+      return reply.status(201).send({ item });
+    },
+  );
+
+  app.patch<{ Params: { id: string }; Body: { judul?: string; lirik?: string } }>(
+    '/api/playlist-lagu/:id',
+    async (req, reply) => {
+      const existing = await prisma.playlistLagu.findUnique({ where: { id: req.params.id } });
+      if (!existing) return reply.status(404).send({ error: 'Lagu tidak ditemukan' });
+      const item = await prisma.playlistLagu.update({
+        where: { id: req.params.id },
+        data: {
+          judul: req.body.judul?.trim() || existing.judul,
+          lirik: req.body.lirik !== undefined ? req.body.lirik.trim() || null : existing.lirik,
+        },
+      });
+      return { item };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/playlist-lagu/:id', async (req) => {
+    await prisma.playlistLagu.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
   // ─── Paket Laboratorium ─────────────────────────────────────────────────────
 
   app.get('/api/paket-lab', async () => {
@@ -1965,6 +2313,7 @@ export async function registerCrudRoutes(app: FastifyInstance) {
         paymentStatus: d.paymentStatus,
         pemeriksaanNama: d.pemeriksaanNama,
         totalHarga: serializeDecimal(d.totalHarga),
+        totalSharing: serializeDecimal(d.totalSharing),
         createdAt: d.registeredAt.toISOString(),
       })),
       pagination: buildPaginationMeta(total, page, limit),
@@ -1980,7 +2329,9 @@ export async function registerCrudRoutes(app: FastifyInstance) {
       noTelepon?: string;
       pengirimNama?: string;
       pemeriksaanNama?: string;
+      kesan?: string;
       totalHarga?: number;
+      totalSharing?: number;
       paymentStatus?: 'BELUM_LUNAS' | 'LUNAS';
       hasilStatus?: 'MENUNGGU_HASIL' | 'SELESAI';
     };
@@ -1996,7 +2347,9 @@ export async function registerCrudRoutes(app: FastifyInstance) {
         noTelepon: b.noTelepon !== undefined ? b.noTelepon?.trim() || null : existing.noTelepon,
         pengirimNama: b.pengirimNama?.trim() ?? existing.pengirimNama,
         pemeriksaanNama: b.pemeriksaanNama?.trim() ?? existing.pemeriksaanNama,
+        kesan: b.kesan !== undefined ? b.kesan?.trim() || null : existing.kesan,
         totalHarga: b.totalHarga !== undefined ? b.totalHarga : existing.totalHarga,
+        totalSharing: b.totalSharing !== undefined ? b.totalSharing : existing.totalSharing,
         paymentStatus: b.paymentStatus ?? existing.paymentStatus,
         hasilStatus: b.hasilStatus ?? existing.hasilStatus,
       },
@@ -2019,6 +2372,7 @@ export async function registerCrudRoutes(app: FastifyInstance) {
         paymentStatus: item.paymentStatus,
         pemeriksaanNama: item.pemeriksaanNama,
         totalHarga: serializeDecimal(item.totalHarga),
+        totalSharing: serializeDecimal(item.totalSharing),
         createdAt: item.registeredAt.toISOString(),
       },
     };
@@ -2247,6 +2601,323 @@ export async function registerCrudRoutes(app: FastifyInstance) {
         logoDataUrl: item.logoDataUrl,
       },
     });
+  });
+
+  app.get<{ Querystring: ListQuery }>('/api/tanda-tangan-elektronik', async (req) => {
+    const { page, limit, skip } = parsePagination(req.query);
+    const where = tandaTanganElektronikListWhere(req.query.q);
+    const [total, items] = await Promise.all([
+      prisma.tandaTanganElektronik.count({ where }),
+      prisma.tandaTanganElektronik.findMany({
+        where,
+        orderBy: { nama: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return { items, pagination: buildPaginationMeta(total, page, limit) };
+  });
+
+  app.post<{
+    Body: { nama: string; alamat?: string; logoTandaTangan?: string | null };
+  }>('/api/tanda-tangan-elektronik', async (req, reply) => {
+    if (!req.body.nama?.trim()) return badRequest(reply, 'nama wajib diisi');
+    const item = await prisma.tandaTanganElektronik.create({
+      data: {
+        nama: req.body.nama.trim(),
+        alamat: req.body.alamat?.trim() || null,
+        logoTandaTangan: req.body.logoTandaTangan ?? null,
+      },
+    });
+    return reply.status(201).send({ item });
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: { nama?: string; alamat?: string; logoTandaTangan?: string | null };
+  }>('/api/tanda-tangan-elektronik/:id', async (req, reply) => {
+    const existing = await prisma.tandaTanganElektronik.findUnique({ where: { id: req.params.id } });
+    if (!existing) return reply.status(404).send({ error: 'Tanda tangan elektronik tidak ditemukan' });
+    const item = await prisma.tandaTanganElektronik.update({
+      where: { id: req.params.id },
+      data: {
+        nama: req.body.nama?.trim() ?? existing.nama,
+        alamat: req.body.alamat !== undefined ? req.body.alamat?.trim() || null : existing.alamat,
+        logoTandaTangan:
+          req.body.logoTandaTangan !== undefined ? req.body.logoTandaTangan : existing.logoTandaTangan,
+      },
+    });
+    return { item };
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/tanda-tangan-elektronik/:id', async (req) => {
+    await prisma.tandaTanganElektronik.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+  app.get<{ Querystring: ListQuery }>('/api/daftar-telpon', async (req) => {
+    const { page, limit, skip } = parsePagination(req.query);
+    const where = daftarTelponListWhere(req.query.q);
+    const [total, items] = await Promise.all([
+      prisma.daftarTelpon.count({ where }),
+      prisma.daftarTelpon.findMany({
+        where,
+        orderBy: { nama: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return { items, pagination: buildPaginationMeta(total, page, limit) };
+  });
+
+  app.post<{
+    Body: {
+      nama: string;
+      telpon?: string;
+      admin?: string;
+      password?: string;
+      noKontrak?: string;
+      namaInstansi?: string;
+    };
+  }>('/api/daftar-telpon', async (req, reply) => {
+    if (!req.body.nama?.trim()) return badRequest(reply, 'nama wajib diisi');
+    const item = await prisma.daftarTelpon.create({
+      data: {
+        nama: req.body.nama.trim(),
+        telpon: req.body.telpon?.trim() || null,
+        admin: req.body.admin?.trim() || null,
+        password: req.body.password?.trim() || null,
+        noKontrak: req.body.noKontrak?.trim() || null,
+        namaInstansi: req.body.namaInstansi?.trim() || null,
+      },
+    });
+    return reply.status(201).send({ item });
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      nama?: string;
+      telpon?: string;
+      admin?: string;
+      password?: string;
+      noKontrak?: string;
+      namaInstansi?: string;
+    };
+  }>('/api/daftar-telpon/:id', async (req, reply) => {
+    const existing = await prisma.daftarTelpon.findUnique({ where: { id: req.params.id } });
+    if (!existing) return reply.status(404).send({ error: 'Data tidak ditemukan' });
+    const item = await prisma.daftarTelpon.update({
+      where: { id: req.params.id },
+      data: {
+        nama: req.body.nama?.trim() ?? existing.nama,
+        telpon: req.body.telpon !== undefined ? req.body.telpon?.trim() || null : existing.telpon,
+        admin: req.body.admin !== undefined ? req.body.admin?.trim() || null : existing.admin,
+        password: req.body.password !== undefined ? req.body.password?.trim() || null : existing.password,
+        noKontrak: req.body.noKontrak !== undefined ? req.body.noKontrak?.trim() || null : existing.noKontrak,
+        namaInstansi:
+          req.body.namaInstansi !== undefined ? req.body.namaInstansi?.trim() || null : existing.namaInstansi,
+      },
+    });
+    return { item };
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/daftar-telpon/:id', async (req) => {
+    await prisma.daftarTelpon.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
+  // ─── Surat Keterangan Sehat ─────────────────────────────────────────────────
+
+  app.get<{ Querystring: ListQuery }>('/api/surat-keterangan-sehat', async (req) => {
+    const { page, limit, skip } = parsePagination(req.query);
+    const where = suratKeteranganSehatListWhere(req.query.q);
+    const [total, items] = await Promise.all([
+      prisma.suratKeteranganSehat.count({ where }),
+      prisma.suratKeteranganSehat.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+    ]);
+    return {
+      items: items.map((it) => ({ ...it, tanggalSurat: it.tanggalSurat.toISOString().slice(0, 10) })),
+      pagination: buildPaginationMeta(total, page, limit),
+    };
+  });
+
+  app.post<{
+    Body: {
+      nomorSurat?: string;
+      namaPasien: string;
+      tempatTanggalLahir?: string;
+      jenisKelamin?: string;
+      pekerjaan?: string;
+      alamatPasien?: string;
+      hasilPemeriksaan?: string;
+      keperluan?: string;
+      tempatSurat?: string;
+      tanggalSurat?: string;
+      namaDokter?: string;
+      jabatanDokter?: string;
+    };
+  }>('/api/surat-keterangan-sehat', async (req, reply) => {
+    if (!req.body.namaPasien?.trim()) return badRequest(reply, 'namaPasien wajib diisi');
+    const item = await prisma.suratKeteranganSehat.create({
+      data: {
+        nomorSurat: req.body.nomorSurat?.trim() || null,
+        namaPasien: req.body.namaPasien.trim(),
+        tempatTanggalLahir: req.body.tempatTanggalLahir?.trim() || null,
+        jenisKelamin: req.body.jenisKelamin?.trim() || 'Laki-laki',
+        pekerjaan: req.body.pekerjaan?.trim() || null,
+        alamatPasien: req.body.alamatPasien?.trim() || null,
+        hasilPemeriksaan: req.body.hasilPemeriksaan?.trim() || null,
+        keperluan: req.body.keperluan?.trim() || null,
+        tempatSurat: req.body.tempatSurat?.trim() || null,
+        tanggalSurat: req.body.tanggalSurat ? new Date(req.body.tanggalSurat) : new Date(),
+        namaDokter: req.body.namaDokter?.trim() || null,
+        jabatanDokter: req.body.jabatanDokter?.trim() || null,
+      },
+    });
+    return reply.status(201).send({ item: { ...item, tanggalSurat: item.tanggalSurat.toISOString().slice(0, 10) } });
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      nomorSurat?: string;
+      namaPasien?: string;
+      tempatTanggalLahir?: string;
+      jenisKelamin?: string;
+      pekerjaan?: string;
+      alamatPasien?: string;
+      hasilPemeriksaan?: string;
+      keperluan?: string;
+      tempatSurat?: string;
+      tanggalSurat?: string;
+      namaDokter?: string;
+      jabatanDokter?: string;
+    };
+  }>('/api/surat-keterangan-sehat/:id', async (req, reply) => {
+    const existing = await prisma.suratKeteranganSehat.findUnique({ where: { id: req.params.id } });
+    if (!existing) return reply.status(404).send({ error: 'Surat tidak ditemukan' });
+    const item = await prisma.suratKeteranganSehat.update({
+      where: { id: req.params.id },
+      data: {
+        nomorSurat: req.body.nomorSurat !== undefined ? req.body.nomorSurat?.trim() || null : existing.nomorSurat,
+        namaPasien: req.body.namaPasien?.trim() ?? existing.namaPasien,
+        tempatTanggalLahir:
+          req.body.tempatTanggalLahir !== undefined ? req.body.tempatTanggalLahir?.trim() || null : existing.tempatTanggalLahir,
+        jenisKelamin: req.body.jenisKelamin?.trim() ?? existing.jenisKelamin,
+        pekerjaan: req.body.pekerjaan !== undefined ? req.body.pekerjaan?.trim() || null : existing.pekerjaan,
+        alamatPasien: req.body.alamatPasien !== undefined ? req.body.alamatPasien?.trim() || null : existing.alamatPasien,
+        hasilPemeriksaan:
+          req.body.hasilPemeriksaan !== undefined ? req.body.hasilPemeriksaan?.trim() || null : existing.hasilPemeriksaan,
+        keperluan: req.body.keperluan !== undefined ? req.body.keperluan?.trim() || null : existing.keperluan,
+        tempatSurat: req.body.tempatSurat !== undefined ? req.body.tempatSurat?.trim() || null : existing.tempatSurat,
+        tanggalSurat: req.body.tanggalSurat ? new Date(req.body.tanggalSurat) : existing.tanggalSurat,
+        namaDokter: req.body.namaDokter !== undefined ? req.body.namaDokter?.trim() || null : existing.namaDokter,
+        jabatanDokter: req.body.jabatanDokter !== undefined ? req.body.jabatanDokter?.trim() || null : existing.jabatanDokter,
+      },
+    });
+    return { item: { ...item, tanggalSurat: item.tanggalSurat.toISOString().slice(0, 10) } };
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/surat-keterangan-sehat/:id', async (req) => {
+    await prisma.suratKeteranganSehat.delete({ where: { id: req.params.id } });
+    return { ok: true };
+  });
+
+  // ─── Surat Keterangan Rujukan ───────────────────────────────────────────────
+
+  app.get<{ Querystring: ListQuery }>('/api/surat-keterangan-rujukan', async (req) => {
+    const { page, limit, skip } = parsePagination(req.query);
+    const where = suratKeteranganRujukanListWhere(req.query.q);
+    const [total, items] = await Promise.all([
+      prisma.suratKeteranganRujukan.count({ where }),
+      prisma.suratKeteranganRujukan.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+    ]);
+    return {
+      items: items.map((it) => ({ ...it, tanggalSurat: it.tanggalSurat.toISOString().slice(0, 10) })),
+      pagination: buildPaginationMeta(total, page, limit),
+    };
+  });
+
+  app.post<{
+    Body: {
+      nomorSurat?: string;
+      namaPasien: string;
+      tempatTanggalLahir?: string;
+      jenisKelamin?: string;
+      alamatPasien?: string;
+      dirujukKe?: string;
+      diagnosaKeluhan?: string;
+      alasanRujukan?: string;
+      tempatSurat?: string;
+      tanggalSurat?: string;
+      namaDokter?: string;
+      jabatanDokter?: string;
+    };
+  }>('/api/surat-keterangan-rujukan', async (req, reply) => {
+    if (!req.body.namaPasien?.trim()) return badRequest(reply, 'namaPasien wajib diisi');
+    const item = await prisma.suratKeteranganRujukan.create({
+      data: {
+        nomorSurat: req.body.nomorSurat?.trim() || null,
+        namaPasien: req.body.namaPasien.trim(),
+        tempatTanggalLahir: req.body.tempatTanggalLahir?.trim() || null,
+        jenisKelamin: req.body.jenisKelamin?.trim() || 'Laki-laki',
+        alamatPasien: req.body.alamatPasien?.trim() || null,
+        dirujukKe: req.body.dirujukKe?.trim() || null,
+        diagnosaKeluhan: req.body.diagnosaKeluhan?.trim() || null,
+        alasanRujukan: req.body.alasanRujukan?.trim() || null,
+        tempatSurat: req.body.tempatSurat?.trim() || null,
+        tanggalSurat: req.body.tanggalSurat ? new Date(req.body.tanggalSurat) : new Date(),
+        namaDokter: req.body.namaDokter?.trim() || null,
+        jabatanDokter: req.body.jabatanDokter?.trim() || null,
+      },
+    });
+    return reply.status(201).send({ item: { ...item, tanggalSurat: item.tanggalSurat.toISOString().slice(0, 10) } });
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      nomorSurat?: string;
+      namaPasien?: string;
+      tempatTanggalLahir?: string;
+      jenisKelamin?: string;
+      alamatPasien?: string;
+      dirujukKe?: string;
+      diagnosaKeluhan?: string;
+      alasanRujukan?: string;
+      tempatSurat?: string;
+      tanggalSurat?: string;
+      namaDokter?: string;
+      jabatanDokter?: string;
+    };
+  }>('/api/surat-keterangan-rujukan/:id', async (req, reply) => {
+    const existing = await prisma.suratKeteranganRujukan.findUnique({ where: { id: req.params.id } });
+    if (!existing) return reply.status(404).send({ error: 'Surat tidak ditemukan' });
+    const item = await prisma.suratKeteranganRujukan.update({
+      where: { id: req.params.id },
+      data: {
+        nomorSurat: req.body.nomorSurat !== undefined ? req.body.nomorSurat?.trim() || null : existing.nomorSurat,
+        namaPasien: req.body.namaPasien?.trim() ?? existing.namaPasien,
+        tempatTanggalLahir:
+          req.body.tempatTanggalLahir !== undefined ? req.body.tempatTanggalLahir?.trim() || null : existing.tempatTanggalLahir,
+        jenisKelamin: req.body.jenisKelamin?.trim() ?? existing.jenisKelamin,
+        alamatPasien: req.body.alamatPasien !== undefined ? req.body.alamatPasien?.trim() || null : existing.alamatPasien,
+        dirujukKe: req.body.dirujukKe !== undefined ? req.body.dirujukKe?.trim() || null : existing.dirujukKe,
+        diagnosaKeluhan:
+          req.body.diagnosaKeluhan !== undefined ? req.body.diagnosaKeluhan?.trim() || null : existing.diagnosaKeluhan,
+        alasanRujukan: req.body.alasanRujukan !== undefined ? req.body.alasanRujukan?.trim() || null : existing.alasanRujukan,
+        tempatSurat: req.body.tempatSurat !== undefined ? req.body.tempatSurat?.trim() || null : existing.tempatSurat,
+        tanggalSurat: req.body.tanggalSurat ? new Date(req.body.tanggalSurat) : existing.tanggalSurat,
+        namaDokter: req.body.namaDokter !== undefined ? req.body.namaDokter?.trim() || null : existing.namaDokter,
+        jabatanDokter: req.body.jabatanDokter !== undefined ? req.body.jabatanDokter?.trim() || null : existing.jabatanDokter,
+      },
+    });
+    return { item: { ...item, tanggalSurat: item.tanggalSurat.toISOString().slice(0, 10) } };
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/surat-keterangan-rujukan/:id', async (req) => {
+    await prisma.suratKeteranganRujukan.delete({ where: { id: req.params.id } });
+    return { ok: true };
   });
 }
 

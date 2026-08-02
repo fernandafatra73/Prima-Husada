@@ -8,7 +8,9 @@ import { useListQueryParams, useListSearch } from '../hooks/useListQueryParams.t
 import { useMutationReload } from '../hooks/useMutationReload.ts';
 import { usePaginatedList } from '../hooks/usePaginatedList.ts';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/api.ts';
-import { formatRupiah } from '../lib/format.ts';
+import { formatRupiah, formatDateShort } from '../lib/format.ts';
+import { generateTransferReportBlob, printTransferReport } from '../pdf/printTransferReport.tsx';
+import { SharingPdfPreviewModal } from '../components/ui/SharingPdfPreviewModal.tsx';
 import '../components/ui/ui.css';
 
 interface TransferItem {
@@ -58,6 +60,10 @@ export function TransferPage() {
   const [deleting, setDeleting] = useState<TransferItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [printingPdf, setPrintingPdf] = useState(false);
+  const [previewingPdf, setPreviewingPdf] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
 
   const loadSummary = useCallback(async () => {
     try {
@@ -122,6 +128,50 @@ export function TransferPage() {
     }
   }
 
+  function buildReportInput() {
+    const todayStr = formatDateShort(new Date().toISOString());
+    const pdfItems = items.map((item, idx) => ({
+      no: (pagination.page - 1) * pagination.limit + idx + 1,
+      tanggal: formatDateDisplay(item.tanggal),
+      namaBank: item.namaBank,
+      noRekening: item.noRekening,
+      namaTransferan: item.namaTransferan,
+      jumlahFormatted: formatRupiah(item.jumlah),
+    }));
+    const totalJumlah = items.reduce((sum, item) => sum + (Number(item.jumlah) || 0), 0);
+    return {
+      tanggalCetak: todayStr,
+      items: pdfItems,
+      totalTransfer: pagination.total,
+      totalJumlahFormatted: formatRupiah(totalJumlah),
+      adminNama: '',
+    };
+  }
+
+  async function handlePrintPdf() {
+    setPrintingPdf(true);
+    try {
+      await printTransferReport(buildReportInput());
+    } catch (err) {
+      console.error('Gagal mencetak PDF transfer:', err);
+    } finally {
+      setPrintingPdf(false);
+    }
+  }
+
+  async function handlePreviewPdf() {
+    setPreviewingPdf(true);
+    try {
+      const blob = await generateTransferReportBlob(buildReportInput());
+      setPreviewBlob(blob);
+      setPreviewModalOpen(true);
+    } catch (err) {
+      console.error('Gagal membuat pratinjau PDF transfer:', err);
+    } finally {
+      setPreviewingPdf(false);
+    }
+  }
+
   async function handleDeleteConfirm() {
     if (!deleting) return;
     setSubmitting(true);
@@ -180,9 +230,31 @@ export function TransferPage() {
       pagination={pagination}
       onPageChange={setPage}
       action={
-        <button type="button" className="btn btn--primary" onClick={openCreate}>
-          + Tambah Transfer
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => void handlePreviewPdf()}
+            disabled={previewingPdf || printingPdf}
+            style={{ border: '1px solid var(--color-border)', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <span>👁️</span>
+            {previewingPdf ? 'Memuat...' : 'Preview PDF'}
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={() => void handlePrintPdf()}
+            disabled={printingPdf || previewingPdf}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <span>🖨️</span>
+            {printingPdf ? 'Membuat PDF...' : 'Cetak PDF'}
+          </button>
+          <button type="button" className="btn btn--primary" onClick={openCreate}>
+            + Tambah Transfer
+          </button>
+        </div>
       }
     >
       <table className="data-table">
@@ -303,6 +375,14 @@ export function TransferPage() {
         loading={submitting}
         onClose={() => setDeleting(null)}
         onConfirm={() => void handleDeleteConfirm()}
+      />
+
+      <SharingPdfPreviewModal
+        open={previewModalOpen}
+        blob={previewBlob}
+        filename="Laporan_Transfer.pdf"
+        onClose={() => setPreviewModalOpen(false)}
+        title="Pratinjau Laporan Transfer"
       />
     </ListPageShell>
   );

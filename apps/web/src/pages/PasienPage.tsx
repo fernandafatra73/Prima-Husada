@@ -4,6 +4,7 @@ import { Modal } from '../components/ui/Modal.tsx';
 import { ModalFormFooter } from '../components/ui/ModalFormFooter.tsx';
 import { ListPageShell } from '../components/ui/ListPageShell.tsx';
 import { TableRowActions } from '../components/ui/TableRowActions.tsx';
+import { KesanRegioPicker } from '../components/KesanRegioPicker.tsx';
 import { parseKlinisData, serializeKlinisData } from '../lib/penunjang.ts';
 import { useListQueryParams, useListSearch } from '../hooks/useListQueryParams.ts';
 import { useListRefresh } from '../context/ListRefreshContext.tsx';
@@ -69,6 +70,7 @@ interface PasienRow {
   readonly hasilStatus: 'MENUNGGU_HASIL' | 'SELESAI';
   readonly paymentStatus: 'BELUM_LUNAS' | 'LUNAS';
   readonly klinis?: string | null;
+  readonly kesan?: string | null;
 }
 
 interface PemeriksaanItem {
@@ -137,6 +139,7 @@ export function PasienPage() {
 
   const queryParams = useListQueryParams(
     {
+      modul: 'RADIOLOGI',
       ...(hasilTab !== 'all' ? { hasilStatus: hasilTab } : {}),
       ...(paymentFilter ? { paymentStatus: paymentFilter } : {}),
       ...(dokterFilter ? { pengirimId: dokterFilter } : {}),
@@ -163,6 +166,12 @@ export function PasienPage() {
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [quickEditOpen, setQuickEditOpen] = useState(false);
+  const [quickEditId, setQuickEditId] = useState<string | null>(null);
+  const [quickEditNama, setQuickEditNama] = useState('');
+  const [quickEditKesan, setQuickEditKesan] = useState('');
+  const [quickEditSaving, setQuickEditSaving] = useState(false);
+  const [quickEditError, setQuickEditError] = useState<string | null>(null);
   const [nama, setNama] = useState('');
   const [tanggalLahir, setTanggalLahir] = useState('');
   const [noTelepon, setNoTelepon] = useState('');
@@ -410,6 +419,38 @@ export function PasienPage() {
       setEditOpen(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Gagal memuat detail pasien');
+    }
+  }
+
+  async function openQuickEdit(id: string) {
+    setQuickEditError(null);
+    try {
+      const res = await apiGet<{ item: PasienDetail }>(`/api/pasien/${id}`);
+      setQuickEditId(res.item.id);
+      setQuickEditNama(res.item.nama);
+      setQuickEditKesan(res.item.kesan ?? '');
+      setQuickEditOpen(true);
+    } catch (err: unknown) {
+      setQuickEditError(err instanceof Error ? err.message : 'Gagal memuat detail pasien');
+    }
+  }
+
+  async function submitQuickEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!quickEditId) return;
+    setQuickEditSaving(true);
+    setQuickEditError(null);
+    try {
+      await apiPatch(`/api/pasien/${quickEditId}`, {
+        nama: quickEditNama,
+        kesan: quickEditKesan,
+      });
+      setQuickEditOpen(false);
+      await reload();
+    } catch (err: unknown) {
+      setQuickEditError(err instanceof Error ? err.message : 'Gagal menyimpan perubahan');
+    } finally {
+      setQuickEditSaving(false);
     }
   }
 
@@ -1092,6 +1133,7 @@ export function PasienPage() {
               <th>Umur</th>
               <th>Pengirim</th>
               <th>Pemeriksaan</th>
+              <th>Kesan</th>
               <th>Total</th>
               <th>Sharing</th>
               <th>Hasil</th>
@@ -1102,7 +1144,7 @@ export function PasienPage() {
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={10}>Belum ada pasien.</td>
+                <td colSpan={11}>Belum ada pasien.</td>
               </tr>
             ) : (
               items.map((p) => (
@@ -1133,6 +1175,7 @@ export function PasienPage() {
                       ) : null;
                     })()}
                   </td>
+                  <td style={{ maxWidth: 220, whiteSpace: 'pre-wrap' }}>{p.kesan || '-'}</td>
                   <td>{formatRupiah(p.totalHarga)}</td>
                   <td>{formatRupiah(p.totalSharing)}</td>
                   <td>
@@ -1150,14 +1193,25 @@ export function PasienPage() {
                     </span>
                   </td>
                   <td>
-                    <TableRowActions
-                      onPrint={() => void handlePrint(p.id)}
-                      onEdit={() => void openEdit(p.id)}
-                      onDelete={() => setDeleteTarget({ id: p.id, label: p.nama })}
-                      printLabel={
-                        printingId === p.id ? 'Membuat PDF…' : 'Cetak hasil radiologi'
-                      }
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn--xs btn--ghost"
+                        onClick={() => void openQuickEdit(p.id)}
+                        title="Edit cepat: nama & kesan"
+                        style={{ border: '1px solid var(--color-border)' }}
+                      >
+                        Edit²
+                      </button>
+                      <TableRowActions
+                        onPrint={() => void handlePrint(p.id)}
+                        onEdit={() => void openEdit(p.id)}
+                        onDelete={() => setDeleteTarget({ id: p.id, label: p.nama })}
+                        printLabel={
+                          printingId === p.id ? 'Membuat PDF…' : 'Cetak hasil radiologi'
+                        }
+                      />
+                    </div>
                   </td>
                 </tr>
               ))
@@ -1360,6 +1414,48 @@ export function PasienPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void confirmDelete()}
       />
+
+      <Modal
+        open={quickEditOpen}
+        title="Edit Cepat: Nama & Kesan"
+        onClose={() => setQuickEditOpen(false)}
+        size="xl"
+      >
+        <form onSubmit={(e) => void submitQuickEdit(e)} className="form-grid">
+          {quickEditError && (
+            <div className="alert alert--error form-grid--full">{quickEditError}</div>
+          )}
+
+          <div className="form-field form-grid--full">
+            <KesanRegioPicker onSelect={(teks) => setQuickEditKesan(teks)} />
+          </div>
+
+          <div className="form-field form-grid--full">
+            <label htmlFor="qe-nama">Nama pasien</label>
+            <input
+              id="qe-nama"
+              required
+              value={quickEditNama}
+              onChange={(e) => setQuickEditNama(e.target.value)}
+            />
+          </div>
+          <div className="form-field form-grid--full">
+            <label htmlFor="qe-kesan">Kesan</label>
+            <textarea
+              id="qe-kesan"
+              rows={4}
+              value={quickEditKesan}
+              onChange={(e) => setQuickEditKesan(clampClinicalInput(e.target.value))}
+              placeholder="Isi kesan radiologi..."
+            />
+          </div>
+          <ModalFormFooter
+            onCancel={() => setQuickEditOpen(false)}
+            submitLabel="Simpan"
+            loading={quickEditSaving}
+          />
+        </form>
+      </Modal>
 
       <Modal
         open={jenisModalMode !== null}

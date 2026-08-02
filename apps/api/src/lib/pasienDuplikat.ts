@@ -32,6 +32,7 @@ export async function syncPasienDuplikat(prisma: PrismaClient, pasienId: string)
       paymentStatus: pasien.paymentStatus,
       pemeriksaanNama,
       totalHarga: pasien.totalHarga,
+      totalSharing: pasien.totalSharing,
       registeredAt: pasien.createdAt,
     },
     update: {
@@ -49,6 +50,7 @@ export async function syncPasienDuplikat(prisma: PrismaClient, pasienId: string)
       paymentStatus: pasien.paymentStatus,
       pemeriksaanNama,
       totalHarga: pasien.totalHarga,
+      totalSharing: pasien.totalSharing,
     },
   });
 }

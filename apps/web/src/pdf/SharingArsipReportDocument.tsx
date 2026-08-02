@@ -11,11 +11,10 @@ import { truncatePdfCell } from './pdfText.ts';
 export interface SharingArsipReportItem {
   readonly no: number;
   readonly nama: string;
-  readonly regCode: string;
   readonly tanggal: string;
   readonly alamat: string;
   readonly pemeriksaan: string;
-  readonly totalHargaFormatted: string;
+  readonly totalSharingFormatted: string;
 }
 
 export interface SharingArsipReportData {
@@ -26,7 +25,7 @@ export interface SharingArsipReportData {
   readonly tanggalCetak: string;
   readonly items: readonly SharingArsipReportItem[];
   readonly totalPasien: number;
-  readonly totalPendapatanFormatted: string;
+  readonly totalSharingFormatted: string;
   readonly adminNama: string;
 }
 
@@ -122,13 +121,12 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     fontSize: 8,
   },
-  colNo: { width: '5%', textAlign: 'center' },
-  colNama: { width: '20%', paddingLeft: 3 },
-  colReg: { width: '13%', paddingLeft: 3 },
-  colTanggal: { width: '10%', textAlign: 'center' },
-  colAlamat: { width: '22%', paddingLeft: 3 },
+  colNo: { width: '6%', textAlign: 'center' },
+  colNama: { width: '24%', paddingLeft: 3 },
+  colTanggal: { width: '12%', textAlign: 'center' },
+  colAlamat: { width: '24%', paddingLeft: 3 },
   colPemeriksaan: { width: '17%', paddingLeft: 3 },
-  colHarga: { width: '13%', textAlign: 'right', paddingRight: 3 },
+  colSharing: { width: '17%', textAlign: 'right', paddingRight: 3 },
 
   summaryContainer: {
     marginTop: 8,
@@ -219,11 +217,10 @@ export function SharingArsipReportDocument({ data }: { readonly data: SharingArs
             <View style={styles.thRow}>
               <Text style={styles.colNo}>No</Text>
               <Text style={styles.colNama}>Nama Pasien</Text>
-              <Text style={styles.colReg}>No. Reg</Text>
               <Text style={styles.colTanggal}>Tanggal</Text>
               <Text style={styles.colAlamat}>Alamat</Text>
               <Text style={styles.colPemeriksaan}>Pemeriksaan</Text>
-              <Text style={styles.colHarga}>Total Harga</Text>
+              <Text style={styles.colSharing}>Total Sharing</Text>
             </View>
             {data.items.length === 0 ? (
               <View style={styles.trRow}>
@@ -236,11 +233,10 @@ export function SharingArsipReportDocument({ data }: { readonly data: SharingArs
                 <View key={row.no} style={styles.trRow}>
                   <Text style={styles.colNo}>{row.no}</Text>
                   <Text style={styles.colNama}>{truncatePdfCell(row.nama, 24)}</Text>
-                  <Text style={styles.colReg}>{row.regCode}</Text>
                   <Text style={styles.colTanggal}>{row.tanggal}</Text>
                   <Text style={styles.colAlamat}>{truncatePdfCell(row.alamat, 26)}</Text>
                   <Text style={styles.colPemeriksaan}>{truncatePdfCell(row.pemeriksaan, 20)}</Text>
-                  <Text style={styles.colHarga}>{row.totalHargaFormatted}</Text>
+                  <Text style={styles.colSharing}>{row.totalSharingFormatted}</Text>
                 </View>
               ))
             )}
@@ -252,8 +248,8 @@ export function SharingArsipReportDocument({ data }: { readonly data: SharingArs
               <Text style={styles.bold}>{data.totalPasien} Pasien</Text>
             </View>
             <View style={styles.summaryRowTotal}>
-              <Text>Total Pendapatan:</Text>
-              <Text>{data.totalPendapatanFormatted}</Text>
+              <Text>Total Sharing:</Text>
+              <Text>{data.totalSharingFormatted}</Text>
             </View>
           </View>
 

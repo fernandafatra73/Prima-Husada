@@ -6,6 +6,8 @@ import { useAppNavigation } from './hooks/useAppNavigation.ts';
 import { clearStoredAuthUser, loadStoredAuthUser, storeAuthUser, type AuthUser } from './lib/auth.ts';
 import { DashboardPage } from './pages/DashboardPage.tsx';
 import { DokterPage } from './pages/DokterPage.tsx';
+import { KaryawanKlinikPage } from './pages/KaryawanKlinikPage.tsx';
+import { TandaTanganElektronikPage } from './pages/TandaTanganElektronikPage.tsx';
 import { JenisPemeriksaanPage } from './pages/JenisPemeriksaanPage.tsx';
 import { KesanPage } from './pages/KesanPage.tsx';
 import { LaboratoriumPage } from './pages/LaboratoriumPage.tsx';
@@ -18,6 +20,7 @@ import { MusikPage } from './pages/MusikPage.tsx';
 import { FatraPage } from './pages/FatraPage.tsx';
 import { PendaftaranUmumPage } from './pages/PendaftaranUmumPage.tsx';
 import { TransferPage } from './pages/TransferPage.tsx';
+import { DaftarTelponPage } from './pages/DaftarTelponPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { PasienPage } from './pages/PasienPage.tsx';
 import { PetugasLabPage } from './pages/PetugasLabPage.tsx';
@@ -48,6 +51,8 @@ import { FarmasiBhpPage } from './pages/FarmasiBhpPage.tsx';
 import { AbsensiPage } from './pages/AbsensiPage.tsx';
 import { KeuanganPembukuanPage } from './pages/KeuanganPembukuanPage.tsx';
 import { PetugasKasirPage } from './pages/PetugasKasirPage.tsx';
+import { PetugasAdminKlinikPage } from './pages/PetugasAdminKlinikPage.tsx';
+import { AnatomiPage } from './pages/AnatomiPage.tsx';
 import { useState } from 'react';
 
 function AccessDenied({ viewId }: { readonly viewId: AppViewId }) {
@@ -93,6 +98,8 @@ function renderView(viewId: AppViewId, role: 'ADMIN' | 'KARYAWAN') {
       return <PendaftaranUmumPage />;
     case 'transfer':
       return <TransferPage />;
+    case 'daftar-telpon':
+      return <DaftarTelponPage />;
     case 'harga-pemeriksaan-lab':
       return <HargaPemeriksaanLabPage />;
     case 'lab':
@@ -135,6 +142,10 @@ function renderView(viewId: AppViewId, role: 'ADMIN' | 'KARYAWAN') {
       return <CetakLabLabPage mode="label" />;
     case 'dokter':
       return <DokterPage />;
+    case 'karyawan-klinik':
+      return <KaryawanKlinikPage />;
+    case 'tanda-tangan-elektronik':
+      return <TandaTanganElektronikPage />;
     case 'jenis-pemeriksaan':
       return <JenisPemeriksaanPage />;
     case 'kesan':
@@ -171,6 +182,30 @@ function renderView(viewId: AppViewId, role: 'ADMIN' | 'KARYAWAN') {
       return <KeuanganPembukuanPage />;
     case 'petugas-kasir':
       return <PetugasKasirPage />;
+    case 'petugas-admin-klinik':
+      return <PetugasAdminKlinikPage />;
+    case 'anatomi-thorak':
+      return <AnatomiPage regio="thorak" />;
+    case 'anatomi-kepala':
+      return <AnatomiPage regio="kepala" />;
+    case 'anatomi-ossa-manus':
+      return <AnatomiPage regio="ossa-manus" />;
+    case 'anatomi-anthebrachi':
+      return <AnatomiPage regio="anthebrachi" />;
+    case 'anatomi-shoulder-joint':
+      return <AnatomiPage regio="shoulder-joint" />;
+    case 'anatomi-lumbosacral':
+      return <AnatomiPage regio="lumbosacral" />;
+    case 'anatomi-bno':
+      return <AnatomiPage regio="bno" />;
+    case 'anatomi-femur':
+      return <AnatomiPage regio="femur" />;
+    case 'anatomi-cruris':
+      return <AnatomiPage regio="cruris" />;
+    case 'anatomi-ankle-joint':
+      return <AnatomiPage regio="ankle-joint" />;
+    case 'anatomi-pedis':
+      return <AnatomiPage regio="pedis" />;
     default:
       return <DashboardPage />;
   }

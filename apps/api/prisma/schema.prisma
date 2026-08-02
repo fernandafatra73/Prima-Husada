@@ -37,10 +37,23 @@ model Dokter {
   nama                  String
   spesialisasi          String?
   noTelepon             String?
+  namaBank              String?
+  noRekening            String?
   defaultSharingAmount  Decimal  @default(0)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   pasien                Pasien[]
+}
+
+model KaryawanKlinik {
+  id           String   @id @default(cuid())
+  nama         String
+  spesialisasi String?
+  noTelepon    String?
+  namaBank     String?
+  noRekening   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Radiolog {
@@ -75,6 +88,26 @@ model PetugasKasir {
   noHp      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model PetugasAdminKlinik {
+  id        String   @id @default(cuid())
+  nama      String
+  noHp      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DaftarTelpon {
+  id            String   @id @default(cuid())
+  nama          String
+  telpon        String?
+  admin         String?
+  password      String?
+  noKontrak     String?
+  namaInstansi  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model HitunganLed {
@@ -215,6 +248,53 @@ model KopSurat {
   updatedAt   DateTime @updatedAt
 }
 
+model SuratKeteranganSehat {
+  id                 String   @id @default(cuid())
+  nomorSurat         String?
+  namaPasien         String
+  tempatTanggalLahir String?
+  jenisKelamin       String   @default("Laki-laki")
+  pekerjaan          String?
+  alamatPasien       String?
+  hasilPemeriksaan   String?
+  keperluan          String?
+  tempatSurat        String?
+  tanggalSurat       DateTime @default(now())
+  namaDokter         String?
+  jabatanDokter      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model SuratKeteranganRujukan {
+  id                 String   @id @default(cuid())
+  nomorSurat         String?
+  namaPasien         String
+  tempatTanggalLahir String?
+  jenisKelamin       String   @default("Laki-laki")
+  alamatPasien       String?
+  dirujukKe          String?
+  diagnosaKeluhan    String?
+  alasanRujukan      String?
+  tempatSurat        String?
+  tanggalSurat       DateTime @default(now())
+  namaDokter         String?
+  jabatanDokter      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+/// Daftar tanda tangan elektronik (nama, gambar tanda tangan, alamat) yang
+/// bisa dipakai untuk kolom penandatangan pada dokumen cetak (kwitansi, surat, dsb).
+model TandaTanganElektronik {
+  id              String   @id @default(cuid())
+  nama            String
+  logoTandaTangan String?
+  alamat          String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 /// Arsip foto rontgen pasien beserta kesan/diagnosa yang diisi manual oleh
 /// radiolog/dokter (BUKAN deteksi otomatis AI — lihat catatan produk).
 model AnalisaFotoRontgen {
@@ -257,6 +337,57 @@ model KesanTemplate {
   gambar    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AnatomiGambar {
+  id         String   @id @default(cuid())
+  regio      String
+  gambar     String
+  thumbnail  String?
+  keterangan String?
+  createdAt  DateTime @default(now())
+
+  @@index([regio])
+}
+
+model PlaylistLagu {
+  id        String   @id @default(cuid())
+  judul     String
+  audioData String
+  lirik     String?
+  createdAt DateTime @default(now())
+}
+
+model KesanBacaanGrup {
+  id        String                @id @default(cuid())
+  nama      String
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  kategori  KesanBacaanKategori[]
+}
+
+model KesanBacaanKategori {
+  id        String          @id @default(cuid())
+  grupId    String
+  grup      KesanBacaanGrup @relation(fields: [grupId], references: [id], onDelete: Cascade)
+  nama      String
+  urutan    Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  bacaan    KesanBacaan[]
+
+  @@index([grupId])
+}
+
+model KesanBacaan {
+  id         String              @id @default(cuid())
+  kategoriId String
+  kategori   KesanBacaanKategori @relation(fields: [kategoriId], references: [id], onDelete: Cascade)
+  teks       String
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@index([kategoriId])
 }
 
 model Staff {
@@ -317,6 +448,7 @@ model PasienDuplikat {
   paymentStatus   PaymentStatus @default(BELUM_LUNAS)
   pemeriksaanNama String        @default("")
   totalHarga      Decimal       @default(0)
+  totalSharing    Decimal       @default(0)
   registeredAt    DateTime
   archivedAt      DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -400,18 +532,22 @@ model PendaftaranUmum {
 }
 
 model FarmasiBhp {
-  id         String   @id @default(cuid())
-  kode       String   @unique
-  nama       String
-  kategori   String   @default("OBAT")
-  satuan     String   @default("Pcs")
-  stok       Int      @default(0)
-  stokMin    Int      @default(10)
-  hargaBeli  Decimal  @default(0)
-  hargaJual  Decimal  @default(0)
-  keterangan String?  @default("")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String    @id @default(cuid())
+  kode           String    @unique
+  nama           String
+  kategori       String    @default("OBAT")
+  satuan         String    @default("Pcs")
+  stok           Int       @default(0)
+  stokMin        Int       @default(10)
+  hargaBeli      Decimal   @default(0)
+  hargaJual      Decimal   @default(0)
+  keterangan     String?   @default("")
+  tanggalBeli    DateTime?
+  tanggalExpire  DateTime?
+  penyedia       String?
+  telponPenyedia String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model AbsensiKaryawan {

@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PDFViewer } from '@react-pdf/renderer';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../lib/api.ts';
-import { formatRupiah } from '../lib/format.ts';
+import { formatRupiah, formatDateShort } from '../lib/format.ts';
 import { Modal } from '../components/ui/Modal.tsx';
 import { ModalFormFooter } from '../components/ui/ModalFormFooter.tsx';
+import { FarmasiBhpCardDocument } from '../pdf/FarmasiBhpCardDocument.tsx';
+import { loadLogoDataUrl } from '../pdf/loadLogoDataUrl.ts';
 import '../components/ui/ui.css';
 
 export interface FarmasiBhpItem {
@@ -16,6 +19,10 @@ export interface FarmasiBhpItem {
   hargaBeli: string;
   hargaJual: string;
   keterangan?: string;
+  tanggalBeli?: string | null;
+  tanggalExpire?: string | null;
+  penyedia?: string | null;
+  telponPenyedia?: string | null;
 }
 
 export function FarmasiBhpPage() {
@@ -39,6 +46,16 @@ export function FarmasiBhpPage() {
   const [formHargaBeli, setFormHargaBeli] = useState('5000');
   const [formHargaJual, setFormHargaJual] = useState('10000');
   const [formKeterangan, setFormKeterangan] = useState('');
+  const [formTanggalBeli, setFormTanggalBeli] = useState('');
+  const [formTanggalExpire, setFormTanggalExpire] = useState('');
+  const [formPenyedia, setFormPenyedia] = useState('');
+  const [formTelponPenyedia, setFormTelponPenyedia] = useState('');
+  const [printingItem, setPrintingItem] = useState<FarmasiBhpItem | null>(null);
+  const [logoSrc, setLogoSrc] = useState('');
+
+  useEffect(() => {
+    void loadLogoDataUrl().then(setLogoSrc).catch(() => setLogoSrc(''));
+  }, []);
 
   // Modal Adjust Stock (Pakai / Restock)
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
@@ -95,6 +112,10 @@ export function FarmasiBhpPage() {
     setFormHargaBeli('5000');
     setFormHargaJual('10000');
     setFormKeterangan('');
+    setFormTanggalBeli('');
+    setFormTanggalExpire('');
+    setFormPenyedia('');
+    setFormTelponPenyedia('');
     setModalOpen(true);
   }
 
@@ -109,6 +130,10 @@ export function FarmasiBhpPage() {
     setFormHargaBeli(it.hargaBeli);
     setFormHargaJual(it.hargaJual);
     setFormKeterangan(it.keterangan ?? '');
+    setFormTanggalBeli(it.tanggalBeli ? it.tanggalBeli.slice(0, 10) : '');
+    setFormTanggalExpire(it.tanggalExpire ? it.tanggalExpire.slice(0, 10) : '');
+    setFormPenyedia(it.penyedia ?? '');
+    setFormTelponPenyedia(it.telponPenyedia ?? '');
     setModalOpen(true);
   }
 
@@ -127,6 +152,10 @@ export function FarmasiBhpPage() {
         hargaBeli: formHargaBeli,
         hargaJual: formHargaJual,
         keterangan: formKeterangan.trim(),
+        tanggalBeli: formTanggalBeli || null,
+        tanggalExpire: formTanggalExpire || null,
+        penyedia: formPenyedia.trim(),
+        telponPenyedia: formTelponPenyedia.trim(),
       };
       if (editId) {
         await apiPatch(`/api/farmasi-bhp/${editId}`, payload);
@@ -430,7 +459,8 @@ export function FarmasiBhpPage() {
                   <th style={{ padding: '0.75rem 1rem', width: '130px' }}>Harga Beli</th>
                   <th style={{ padding: '0.75rem 1rem', width: '140px' }}>Harga Jual / Tarif</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Keterangan</th>
-                  <th style={{ padding: '0.75rem 1rem', width: '170px', textAlign: 'center' }}>Aksi</th>
+                  <th style={{ padding: '0.75rem 1rem', width: '110px' }}>Expire</th>
+                  <th style={{ padding: '0.75rem 1rem', width: '210px', textAlign: 'center' }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -492,8 +522,23 @@ export function FarmasiBhpPage() {
                       <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', color: '#64748b' }}>
                         {it.keterangan || '—'}
                       </td>
+                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.8rem' }}>
+                        {it.tanggalExpire ? (
+                          (() => {
+                            const expDate = new Date(it.tanggalExpire!);
+                            const isExpiringSoon = expDate.getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000;
+                            return (
+                              <span style={{ color: isExpiringSoon ? '#dc2626' : '#475569', fontWeight: isExpiringSoon ? 700 : 400 }}>
+                                {expDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </span>
+                            );
+                          })()
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                           <button
                             type="button"
                             className="btn btn--secondary btn--sm"
@@ -530,6 +575,15 @@ export function FarmasiBhpPage() {
                             style={{ padding: '0.3rem 0.5rem' }}
                           >
                             ✏️
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--secondary btn--sm"
+                            onClick={() => setPrintingItem(it)}
+                            title="Cetak / Preview"
+                            style={{ padding: '0.3rem 0.5rem' }}
+                          >
+                            🖨️
                           </button>
                           <button
                             type="button"
@@ -675,6 +729,57 @@ export function FarmasiBhpPage() {
                 style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
               />
             </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.3rem', fontSize: '0.9rem' }}>
+                  Tanggal Beli
+                </label>
+                <input
+                  type="date"
+                  value={formTanggalBeli}
+                  onChange={(e) => setFormTanggalBeli(e.target.value)}
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.3rem', fontSize: '0.9rem' }}>
+                  Tanggal Expire
+                </label>
+                <input
+                  type="date"
+                  value={formTanggalExpire}
+                  onChange={(e) => setFormTanggalExpire(e.target.value)}
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.3rem', fontSize: '0.9rem' }}>
+                  Penyedia
+                </label>
+                <input
+                  type="text"
+                  value={formPenyedia}
+                  onChange={(e) => setFormPenyedia(e.target.value)}
+                  placeholder="Nama supplier/distributor"
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.3rem', fontSize: '0.9rem' }}>
+                  Telpon Penyedia
+                </label>
+                <input
+                  type="text"
+                  value={formTelponPenyedia}
+                  onChange={(e) => setFormTelponPenyedia(e.target.value)}
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </div>
+            </div>
           </div>
 
           <ModalFormFooter
@@ -734,6 +839,42 @@ export function FarmasiBhpPage() {
           />
         </form>
       </Modal>
+
+      {printingItem && (
+        <Modal
+          open={true}
+          title={`Cetak / Preview — ${printingItem.nama}`}
+          onClose={() => setPrintingItem(null)}
+          size="lg"
+        >
+          <div style={{ width: '100%', height: '70vh' }}>
+            <PDFViewer width="100%" height="100%" className="pdf-viewer">
+              <FarmasiBhpCardDocument
+                data={{
+                  logoSrc,
+                  tanggalCetak: formatDateShort(new Date().toISOString()),
+                  kode: printingItem.kode,
+                  nama: printingItem.nama,
+                  kategori: printingItem.kategori,
+                  satuan: printingItem.satuan,
+                  stok: String(printingItem.stok),
+                  hargaBeliFormatted: formatRupiah(Number(printingItem.hargaBeli) || 0),
+                  hargaJualFormatted: formatRupiah(Number(printingItem.hargaJual) || 0),
+                  tanggalBeli: printingItem.tanggalBeli
+                    ? new Date(printingItem.tanggalBeli).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '',
+                  tanggalExpire: printingItem.tanggalExpire
+                    ? new Date(printingItem.tanggalExpire).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '',
+                  penyedia: printingItem.penyedia ?? '',
+                  telponPenyedia: printingItem.telponPenyedia ?? '',
+                  keterangan: printingItem.keterangan ?? '',
+                }}
+              />
+            </PDFViewer>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
